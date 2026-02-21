@@ -1,8 +1,19 @@
 # chromaticker
+The Chromatel Raspberry Pi LED Stock Ticker.
 
 I built this project becuase I thought it would be super cool to have a stock ticker in my office and I didn't want to pay $4k for something with a subsctiption, so with a little copilot and claude and we made this. You will probably see in the code my current some sample portfolio I made up please don't consider that financial advice. 
 
 There is no security built in to this code and may introduce vulnerabilities. I would run this thing on a locked down vlan, the web ui has no authentication and I didn't want this thing to be to complex.
+
+Materials List - 
+Pi 4 
+Pi 4 poe hat
+Adafruit RBG Hub75 Hat
+64gb cheapo sd card
+2x These vevor premade signs. I canibalized them since they had the frame and the psu and the panels it was cleaner and easier to do that then buy panels. This is the exact item name VEVOR Programmable LED Sign, P10 Full Color Flexible Digital Scrolling Panel, DIY Custom Text Pattern GIF Display Board, Bluetooth APP Control Message Shop Sign for Store Business Advertising,40x8"
+2x 2020 Aluminium coupler thing to join the two vevor signs to make it a 1x6 panel sign.  You could technically chain as many as you want and make like a 365 wrap around but I didn't have the space. 
+Its stuck to the wall with a bunch of alien tape 
+
 
 ChromaTicker — Project Summary
 The LED Ticker is a multi‑process Python application designed for Raspberry Pi that drives a 192×16 HUB75 RGB LED matrix (or an HDMI-rendered pixel window). It displays real‑time market data, live sports scores, weather alerts, time prerolls, and custom messages, all managed through a sleek web-based control panel with hot‑reload configuration.
