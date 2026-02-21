@@ -1,0 +1,8 @@
+flask
+yfinance
+requests
+pillow
+python-dateutil
+pytz
+feedparser
+rgbmatrix
