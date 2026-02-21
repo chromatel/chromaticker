@@ -1,0 +1,737 @@
+<!doctype html>
+<!-- Property of solutions reseaux chromatel -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Documentation - LED Ticker Control Panel</title>
+  <style>
+    :root {
+      --bg:#080d14;--panel:#0b1322;--line:#1c2a3a;--text:#cbd5e1;
+      --muted:#64748b;--ok:#22c55e;--bad:#ef4444;--warn:#f59e0b;
+      --link:#60a5fa;--accent:#2563eb;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px;line-height:1.6}
+    a{color:var(--link);text-decoration:none}
+    a:hover{text-decoration:underline}
+    code,pre,kbd{font-family:ui-monospace,monospace}
+
+    /* Layout */
+    header{display:flex;align-items:center;gap:12px;padding:12px 24px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+    header h1{font-size:18px;color:#e2e8f0}
+    .badge{display:inline-block;padding:2px 10px;background:#1e293b;border-radius:10px;font-size:11px;color:#94a3b8}
+    .btn{padding:6px 14px;background:#1e40af;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:none}
+    .btn:hover{background:#1d4ed8;text-decoration:none}
+    .btn.secondary{background:#1e293b;color:#cbd5e1}
+    .btn.secondary:hover{background:#263445}
+    .toolbar{margin-left:auto;display:flex;gap:8px}
+
+    .layout{display:flex;min-height:calc(100vh - 50px)}
+
+    /* Sidebar TOC */
+    .sidebar{width:220px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);padding:16px 0;position:sticky;top:0;height:calc(100vh - 50px);overflow-y:auto}
+    .sidebar-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:0 16px 8px}
+    .toc-link{display:block;padding:5px 16px;color:#94a3b8;font-size:13px;border-left:2px solid transparent;transition:all .1s}
+    .toc-link:hover{color:#e2e8f0;background:#0f1a2a;text-decoration:none;border-left-color:var(--accent)}
+    .toc-link.sub{padding-left:28px;font-size:12px;color:var(--muted)}
+    .toc-sep{height:1px;background:var(--line);margin:8px 16px}
+
+    /* Main content */
+    main{flex:1;padding:24px 32px;max-width:860px}
+
+    h2{font-size:18px;color:#93c5fd;margin:32px 0 12px;padding-top:8px;border-bottom:1px solid var(--line);padding-bottom:6px}
+    h3{font-size:15px;color:#a7b1c2;margin:20px 0 8px}
+    h4{font-size:13px;color:#7f8ea3;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+    p{margin:8px 0;color:var(--text)}
+    ul,ol{margin:8px 0 8px 20px;color:var(--text)}
+    li{margin:3px 0}
+
+    /* Code blocks */
+    pre{background:#040810;border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;margin:10px 0;font-size:12px;line-height:1.5;color:#94d1ff}
+    code{background:#0a1020;padding:1px 5px;border-radius:3px;font-size:12px;color:#7dd3fc}
+    pre code{background:none;padding:0;color:inherit}
+    kbd{background:#1e293b;border:1px solid #334155;border-radius:4px;padding:1px 6px;font-size:11px}
+
+    /* Cards and callouts */
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:10px 0}
+    .callout{border-radius:6px;padding:10px 14px;margin:10px 0;font-size:13px}
+    .callout.tip{background:#0c2218;border-left:3px solid var(--ok);color:#86efac}
+    .callout.warn{background:#1c1405;border-left:3px solid var(--warn);color:#fcd34d}
+    .callout.info{background:#0c1a2e;border-left:3px solid var(--link);color:#93c5fd}
+
+    /* Config reference table */
+    .cfg-table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px}
+    .cfg-table th{text-align:left;padding:6px 10px;background:#0a1020;color:#64748b;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)}
+    .cfg-table td{padding:6px 10px;border-bottom:1px solid #111d2a;vertical-align:top}
+    .cfg-table tr:hover td{background:#090f1a}
+    .cfg-key{color:#7dd3fc;font-family:monospace;white-space:nowrap}
+    .cfg-default{color:#6ee7b7;font-family:monospace;font-size:11px;white-space:nowrap}
+    .cfg-desc{color:#94a3b8}
+
+    /* Status dots */
+    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+    .dot.green{background:var(--ok)}
+    .dot.yellow{background:var(--warn)}
+    .dot.red{background:var(--bad)}
+    .dot.blue{background:#3b82f6}
+    .dot.grey{background:#6b7280}
+
+    /* Log markers */
+    .marker{display:inline-block;padding:1px 6px;border-radius:3px;font-family:monospace;font-size:11px;font-weight:700;margin-right:4px}
+    .marker.start{background:#1e3a1e;color:#86efac}
+    .marker.cfg{background:#1c2e0f;color:#a3e635}
+    .marker.preroll{background:#1e2a1e;color:#4ade80}
+    .marker.alert{background:#2d1515;color:#f87171}
+    .marker.weather{background:#1a1a2e;color:#818cf8}
+    .marker.sb{background:#102030;color:#38bdf8}
+    .marker.rgb{background:#200a00;color:#fb923c}
+    .marker.goal{background:#1c0a10;color:#f472b6}
+
+    /* Quick ref grid */
+    .qref-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+    @media(max-width:600px){.qref-grid{grid-template-columns:1fr}.sidebar{display:none}}
+    .qref-card{background:#040a10;border:1px solid var(--line);border-radius:6px;padding:12px}
+    .qref-card h4{color:#60a5fa;margin-bottom:8px;font-size:12px;text-transform:uppercase}
+
+    .state-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;font-weight:700;margin:2px}
+    .state-tk{background:#102010;color:#4ade80}
+    .state-pr{background:#1a1a00;color:#fbbf24}
+    .state-sb{background:#001020;color:#38bdf8}
+    .state-ov{background:#200020;color:#c084fc}
+
+    .override-badge{display:inline-block;padding:3px 10px;border-radius:4px;font-family:monospace;font-size:11px;font-weight:700;margin:3px 3px 3px 0}
+    .ov-bright{background:#1a1a00;color:#fbbf24}
+    .ov-clock{background:#001a1a;color:#22d3ee}
+    .ov-sb{background:#001020;color:#38bdf8}
+    .ov-msg{background:#0a1a00;color:#86efac}
+    .ov-maint{background:#1a0000;color:#f87171}
+  </style>
+</head>
+<body>
+<header>
+  <h1>LED Ticker - Documentation</h1>
+  <span class="badge">Property of solutions reseaux chromatel</span>
+  <span class="badge" id="ver-badge">v{{ version }}</span>
+  <div class="toolbar">
+    <a class="btn secondary" href="/">Back to Control Panel</a>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-title">Contents</div>
+    <a class="toc-link" href="#overview">Overview</a>
+    <a class="toc-link sub" href="#architecture">Architecture</a>
+    <a class="toc-link sub" href="#states">Display States</a>
+    <div class="toc-sep"></div>
+    <a class="toc-link" href="#features">Core Features</a>
+    <a class="toc-link sub" href="#market">Market Data</a>
+    <a class="toc-link sub" href="#holdings">Holdings</a>
+    <a class="toc-link sub" href="#preroll">Time Preroll</a>
+    <a class="toc-link sub" href="#scoreboard">Scoreboard</a>
+    <a class="toc-link sub" href="#weather">Weather Alerts</a>
+    <a class="toc-link sub" href="#messages">Messages</a>
+    <a class="toc-link sub" href="#dimming">Dimming</a>
+    <a class="toc-link sub" href="#overrides">Override Modes</a>
+    <div class="toc-sep"></div>
+    <a class="toc-link" href="#config">Config Reference</a>
+    <a class="toc-link sub" href="#cfg-display">Display &amp; Layout</a>
+    <a class="toc-link sub" href="#cfg-speeds">Scroll Speeds</a>
+    <a class="toc-link sub" href="#cfg-market">Market</a>
+    <a class="toc-link sub" href="#cfg-weather">Weather</a>
+    <a class="toc-link sub" href="#cfg-scoreboard">Scoreboard</a>
+    <a class="toc-link sub" href="#cfg-dim">Dimming</a>
+    <a class="toc-link sub" href="#cfg-clock">Clock Override</a>
+    <a class="toc-link sub" href="#cfg-rgb">RGB Matrix</a>
+    <div class="toc-sep"></div>
+    <a class="toc-link" href="#operations">Operations</a>
+    <a class="toc-link sub" href="#hot-reload">Hot-Reload</a>
+    <a class="toc-link sub" href="#adding-tickers">Adding Tickers</a>
+    <a class="toc-link sub" href="#testing">Testing Features</a>
+    <a class="toc-link sub" href="#logs">Logs &amp; Markers</a>
+    <div class="toc-sep"></div>
+    <a class="toc-link" href="#troubleshooting">Troubleshooting</a>
+    <a class="toc-link sub" href="#ts-display">Display Issues</a>
+    <a class="toc-link sub" href="#ts-data">Data Issues</a>
+    <a class="toc-link sub" href="#ts-perf">Performance</a>
+    <div class="toc-sep"></div>
+    <a class="toc-link" href="#api">REST API</a>
+    <a class="toc-link sub" href="#api-config">Config</a>
+    <a class="toc-link sub" href="#api-status">Status &amp; Workers</a>
+    <a class="toc-link sub" href="#api-actions">Quick Actions</a>
+    <a class="toc-link sub" href="#api-preview">Preview</a>
+    <div class="toc-sep"></div>
+    <a class="toc-link" href="#files">File Structure</a>
+    <a class="toc-link" href="#quickref">Quick Reference</a>
+  </nav>
+
+  <main>
+
+    <!-- OVERVIEW -->
+    <h2 id="overview">Overview</h2>
+    <p>The LED Ticker is a multi-process Python application running on Raspberry Pi that drives a 192x16 HUB75 LED matrix panel (or HDMI window). It displays real-time stock market data, live NHL/NFL scores, Environment Canada weather alerts, and time displays in a continuously scrolling format.</p>
+    <p><strong>Web UI:</strong> <code>http://[pi-ip]:5080</code> &mdash; All configuration is done here. Changes save to <code>config.json</code> and hot-reload into the ticker within ~1 second.</p>
+
+    <div class="callout tip">
+      <strong>Hot-reload:</strong> Every save from the Web UI automatically applies to the running ticker. No restart needed for most changes. Workers (market, weather, scoreboard) restart automatically when their config changes.
+    </div>
+
+    <h3 id="architecture">Architecture</h3>
+    <div class="card">
+      <pre>ticker.py (Main Loop + State Machine)
+  ├── market_worker    → yfinance API  → prices, % change
+  ├── weather_worker   → Environment Canada RSS  → alerts
+  └── scoreboard_worker → NHL / NFL APIs  → live scores
+
+rendering.py  → all drawing, fonts, dimming, LED output
+flask_ui.py   → Web control panel (port 5080)
+config.json   → all settings (hot-reloaded on change)</pre>
+    </div>
+    <p>Each worker runs in its own separate process, communicating back to the main loop via multiprocessing queues. The main loop runs at up to 60 FPS, composing frames from cached worker data and writing them pixel-by-pixel to the LED matrix.</p>
+
+    <h3 id="states">Display States</h3>
+    <p>The ticker operates in one of three states at any time:</p>
+    <div class="card">
+      <span class="state-badge state-tk">TK</span> <strong>Ticker</strong> &mdash; Normal operation. Scrolling market data on top and bottom rows.<br><br>
+      <span class="state-badge state-pr">PR</span> <strong>Preroll</strong> &mdash; Top-of-hour or market event. Large centered time or scrolling announcement.<br><br>
+      <span class="state-badge state-sb">SB</span> <strong>Scoreboard</strong> &mdash; A tracked team has a live game. Full-screen score display with logos.<br><br>
+      <span class="state-badge state-ov">OV</span> <strong>Override</strong> &mdash; Manual mode activated from web UI (Clock, Bright, Message, Maint, Scoreboard).
+    </div>
+    <p><strong>Priority:</strong> Override &gt; Score Alert &gt; Preroll &gt; Scoreboard &gt; Ticker</p>
+
+    <!-- FEATURES -->
+    <h2 id="features">Core Features</h2>
+
+    <h3 id="market">Market Data</h3>
+    <p>Stock and index data is fetched via <strong>yfinance</strong> (Yahoo Finance). Each ticker shows label, price, and percentage change color-coded green (up) or red (down). A status dot on the time display indicates data freshness and market state.</p>
+
+    <h4>Status Dot Colors</h4>
+    <ul>
+      <li><span class="dot green"></span><strong>Green</strong> &mdash; Market open (NYSE regular session), data fresh</li>
+      <li><span class="dot grey"></span><strong>Grey</strong> &mdash; Market closed, data is recent</li>
+      <li><span class="dot yellow"></span><strong>Yellow</strong> &mdash; Pre-market (before 9:30 AM ET on weekdays)</li>
+      <li><span class="dot blue"></span><strong>Blue</strong> &mdash; Your tracked team has a game today</li>
+      <li><span class="dot red"></span><strong>Red</strong> &mdash; Data stale (&gt;FRESH_SEC old) or no data</li>
+    </ul>
+
+    <h3 id="holdings">Holdings (Portfolio Tracking)</h3>
+    <p>When holdings are enabled, the ticker shows portfolio market value instead of just price. Example: owning 50 shares of SPY at $450 shows <code>$22,500 +1.12%</code> instead of <code>$450.00 +1.12%</code>.</p>
+    <div class="callout info">
+      Holdings hot-reload: changes in the web UI apply immediately to the display without restarting the service. The percentage change now shows 2 decimal places (e.g., <code>+1.12%</code>).
+    </div>
+    <p>Format in the web UI (Holdings section): <code>SYMBOL=SHARES</code> one per line. Fractions are supported.</p>
+    <pre>SPY=50.0
+QQQ=30.5
+VFV.TO=100
+XEQT.TO=1.2431</pre>
+
+    <h3 id="preroll">Time Preroll</h3>
+    <p>At the top of every hour, the ticker briefly shows the current time in large centered format. This also fires for market open (9:30 AM ET) and market close (4:00 PM ET) with a scrolling announcement.</p>
+    <table class="cfg-table">
+      <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+      <tr><td class="cfg-key">TIME_PREROLL_ENABLED</td><td class="cfg-default">true</td><td class="cfg-desc">Enable/disable preroll entirely</td></tr>
+      <tr><td class="cfg-key">TIME_PREROLL_SEC</td><td class="cfg-default">15</td><td class="cfg-desc">Duration in seconds</td></tr>
+      <tr><td class="cfg-key">PREROLL_STYLE</td><td class="cfg-default">BIGTIME</td><td class="cfg-desc">BIGTIME (static), MARQUEE (scrolling), NONE</td></tr>
+      <tr><td class="cfg-key">PREROLL_COLOR</td><td class="cfg-default">yellow</td><td class="cfg-desc">white / yellow / green / red / blue / magenta / cyan</td></tr>
+      <tr><td class="cfg-key">PREROLL_PPS</td><td class="cfg-default">40.0</td><td class="cfg-desc">Pixels/second for MARQUEE style</td></tr>
+    </table>
+    <p>Market events (<code>*** MARKET OPEN ***</code> / <code>*** MARKET CLOSED ***</code>) fire once per day and are not repeated.</p>
+
+    <h3 id="scoreboard">Live Scoreboard</h3>
+    <p>When a tracked team has a live game, the ticker automatically switches to a full-height scoreboard showing team logos, scores, period, and game clock. Goals trigger a red/white/blue flash animation and a score alert scrolls across the display.</p>
+    <h4>Supported Leagues</h4>
+    <ul>
+      <li><strong>NHL</strong> &mdash; via api-web.nhle.com</li>
+      <li><strong>NFL</strong> &mdash; via ESPN API</li>
+    </ul>
+    <h4>Scoreboard Display Modes</h4>
+    <p><strong>Full-Height (192x16):</strong> Team logos on each side (32px), large score in center, clock and period. Score flash animation on goal.</p>
+    <p><strong>Compact (in ticker rows):</strong> <code>MTL 3 - TOR 2 (P3 5:42)</code> on top row, SOG or possession on bottom row.</p>
+    <h4>Key Settings</h4>
+    <pre>"SCOREBOARD_ENABLED": true,
+"SCOREBOARD_LEAGUES": ["NHL","NFL"],
+"SCOREBOARD_NHL_TEAMS": ["MTL"],
+"SCOREBOARD_NFL_TEAMS": [],
+"SCOREBOARD_PRECEDENCE": "auto",
+"SCORE_ALERTS_ENABLED": true,
+"SCOREBOARD_TEST": false</pre>
+    <div class="callout tip">
+      To test the scoreboard without a live game: set <code>SCOREBOARD_TEST: true</code>, <code>SCOREBOARD_TEST_HOME: "MTL"</code>, <code>SCOREBOARD_TEST_AWAY: "TOR"</code> in config.json.
+    </div>
+
+    <h3 id="weather">Weather Alerts</h3>
+    <p>Polls Environment Canada RSS feed for your region. When an active warning, advisory, or watch is found, it scrolls as a full-height banner across the display.</p>
+    <h4>Alert Severity Behavior</h4>
+    <ul>
+      <li><strong>Warning</strong> &mdash; Red text, shows every N warning scrolls (default: 5)</li>
+      <li><strong>Advisory / Watch</strong> &mdash; Yellow text, shows every N advisory scrolls (default: 2)</li>
+    </ul>
+    <h4>Key Settings</h4>
+    <pre>"WEATHER_RSS_URL": "https://weather.gc.ca/rss/alerts/45.529_-73.562_e.xml",
+"WEATHER_REFRESH_SEC": 300,
+"WEATHER_INCLUDE_WATCH": true,
+"WEATHER_WARNING_COLOR": "red",
+"WEATHER_ADVISORY_COLOR": "yellow",
+"WEATHER_STICKY_SEC": 20,
+"WEATHER_REPEAT_SEC": 600</pre>
+    <p>To test: set <code>WEATHER_FORCE_ACTIVE: true</code> and <code>WEATHER_FORCE_TEXT: "TEST ALERT"</code>.</p>
+    <p>To find your RSS URL: go to <a href="https://weather.gc.ca/warnings/index_e.html" target="_blank">weather.gc.ca/warnings</a>, find your location, copy the RSS link.</p>
+
+    <h3 id="messages">Custom Messages</h3>
+    <p>Inject a custom message that appears every N scroll cycles. Useful for announcements or labels.</p>
+    <pre>"INJECT_MESSAGE": "*** DEV MODE ***",
+"MESSAGE_EVERY": 5,        // 0 = disabled
+"MESSAGE_ROW": "auto",     // top / bottom / both / auto
+"MESSAGE_COLOR": "magenta",
+"MESSAGE_TEST_FORCE": false</pre>
+
+    <h3 id="dimming">Dimming &amp; Scheduling</h3>
+    <p>Multiple dimming systems can run simultaneously. Night Mode is the simplest and most common setup.</p>
+    <h4>Night Mode (Recommended)</h4>
+    <pre>"NIGHT_MODE_ENABLED": true,
+"NIGHT_MODE_START": "22:00",
+"NIGHT_MODE_END": "07:00",
+"NIGHT_MODE_DIM_PCT": 30,     // brightness %
+"NIGHT_MODE_SPEED_PCT": 75    // scroll speed %</pre>
+    <h4>Manual Dimming</h4>
+    <pre>"DIM_ENABLED": true,
+"DIM_LEVEL": "off"   // off=100%, low=30%, medium=60%</pre>
+    <h4>Scheduled Dimming (up to 3 windows)</h4>
+    <pre>"DIM_SCHEDULE_ENABLED": true,
+"DIM1_START": "22:00", "DIM1_END": "06:00", "DIM1_PCT": 30</pre>
+    <h4>Auto Off/On Schedule</h4>
+    <pre>"SCHEDULE_ENABLED": false,
+"SCHEDULE_OFF_START": "23:00",
+"SCHEDULE_OFF_END": "07:00"</pre>
+
+    <h3 id="overrides">Override Modes</h3>
+    <p>Activated from the web UI or by setting <code>OVERRIDE_MODE</code> in config. Take precedence over all normal states. All overrides can have a duration in minutes (0 = until manually cleared).</p>
+    <div class="card">
+      <span class="override-badge ov-bright">BRIGHT</span> Full brightness, runs normal ticker display<br>
+      <span class="override-badge ov-clock">CLOCK</span> Large centered clock only (no market data)<br>
+      <span class="override-badge ov-sb">SCOREBOARD</span> Force scoreboard view regardless of game state<br>
+      <span class="override-badge ov-msg">MESSAGE</span> Show custom message from OVERRIDE_MESSAGE_TEXT<br>
+      <span class="override-badge ov-maint">MAINT</span> Maintenance screen with scrolling MAINTENANCE_TEXT
+    </div>
+    <p>Quick actions in web UI: <strong>Clock 5m</strong>, <strong>Full Bright 30m</strong>, <strong>Clear Override</strong> — no confirmation required.</p>
+
+    <!-- CONFIG REFERENCE -->
+    <h2 id="config">Configuration Reference</h2>
+    <div class="callout info">All settings live in <code>config.json</code> in the project directory. Edit via the web UI or directly with <kbd>nano config.json</kbd>. Changes hot-reload automatically.</div>
+
+    <h3 id="cfg-display">Display &amp; Layout</h3>
+    <table class="cfg-table">
+      <tr><th>Key</th><th>Default</th><th>Description</th></tr>
+      <tr><td class="cfg-key">OUTPUT_MODE</td><td class="cfg-default">RGBMATRIX</td><td class="cfg-desc">RGBMATRIX for LED panel, HDMI for window preview</td></tr>
+      <tr><td class="cfg-key">MODEL_NAME</td><td class="cfg-default">Matrix192x16</td><td class="cfg-desc">Panel model preset for auto W/H</td></tr>
+      <tr><td class="cfg-key">W</td><td class="cfg-default">192</td><td class="cfg-desc">Panel width in pixels (0 = auto from MODEL_NAME)</td></tr>
+      <tr><td class="cfg-key">H</td><td class="cfg-default">16</td><td class="cfg-desc">Panel height in pixels (0 = auto)</td></tr>
+      <tr><td class="cfg-key">LAYOUT</td><td class="cfg-default">dual</td><td class="cfg-desc">dual (two 8px rows) or single (one 16px row)</td></tr>
+      <tr><td class="cfg-key">FPS</td><td class="cfg-default">30</td><td class="cfg-desc">Render loop frames per second</td></tr>
+      <tr><td class="cfg-key">TICKER_SCALE</td><td class="cfg-default">8</td><td class="cfg-desc">Scale multiplier for HDMI preview window</td></tr>
+      <tr><td class="cfg-key">TICKER_TZ</td><td class="cfg-default">America/Montreal</td><td class="cfg-desc">Timezone for clock, preroll, and market hours</td></tr>
+      <tr><td class="cfg-key">MICROFONT_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Use 5x7 pixel font in dual layout (very tiny)</td></tr>
+      <tr><td class="cfg-key">DEBUG_OVERLAY</td><td class="cfg-default">false</td><td class="cfg-desc">Show FPS, state, dim% overlay on bottom row</td></tr>
+    </table>
+
+    <h3 id="cfg-speeds">Scroll Speeds</h3>
+    <table class="cfg-table">
+      <tr><th>Key</th><th>Default</th><th>Description</th></tr>
+      <tr><td class="cfg-key">PPS_TOP</td><td class="cfg-default">16.0</td><td class="cfg-desc">Top row pixels/second</td></tr>
+      <tr><td class="cfg-key">PPS_BOT</td><td class="cfg-default">20.0</td><td class="cfg-desc">Bottom row pixels/second</td></tr>
+      <tr><td class="cfg-key">PPS_SINGLE</td><td class="cfg-default">20.0</td><td class="cfg-desc">Single layout pixels/second</td></tr>
+      <tr><td class="cfg-key">PREROLL_PPS</td><td class="cfg-default">40.0</td><td class="cfg-desc">Preroll marquee scroll speed</td></tr>
+    </table>
+
+    <h3 id="cfg-market">Market Data</h3>
+    <table class="cfg-table">
+      <tr><th>Key</th><th>Default</th><th>Description</th></tr>
+      <tr><td class="cfg-key">TICKERS_TOP</td><td class="cfg-default">[]</td><td class="cfg-desc">Top row tickers: list of [SYMBOL, LABEL] pairs</td></tr>
+      <tr><td class="cfg-key">TICKERS_BOT</td><td class="cfg-default">[]</td><td class="cfg-desc">Bottom row tickers: list of [SYMBOL, LABEL] pairs</td></tr>
+      <tr><td class="cfg-key">HOLDINGS_ENABLED</td><td class="cfg-default">true</td><td class="cfg-desc">Show portfolio value instead of price when enabled</td></tr>
+      <tr><td class="cfg-key">HOLDINGS</td><td class="cfg-default">{}</td><td class="cfg-desc">Dict of {SYMBOL: {shares: N}} for portfolio tracking</td></tr>
+      <tr><td class="cfg-key">REFRESH_SEC</td><td class="cfg-default">240</td><td class="cfg-desc">Market data refresh interval in seconds</td></tr>
+      <tr><td class="cfg-key">FRESH_SEC</td><td class="cfg-default">300</td><td class="cfg-desc">Seconds before data is considered stale (dot goes red)</td></tr>
+    </table>
+
+    <h3 id="cfg-weather">Weather</h3>
+    <table class="cfg-table">
+      <tr><th>Key</th><th>Default</th><th>Description</th></tr>
+      <tr><td class="cfg-key">WEATHER_RSS_URL</td><td class="cfg-default">…qc-147…</td><td class="cfg-desc">Environment Canada RSS alert feed URL for your location</td></tr>
+      <tr><td class="cfg-key">WEATHER_REFRESH_SEC</td><td class="cfg-default">300</td><td class="cfg-desc">How often to poll the RSS feed</td></tr>
+      <tr><td class="cfg-key">WEATHER_INCLUDE_WATCH</td><td class="cfg-default">true</td><td class="cfg-desc">Include Watch-level alerts (not just Warning)</td></tr>
+      <tr><td class="cfg-key">WEATHER_WARNING_COLOR</td><td class="cfg-default">red</td><td class="cfg-desc">Color for warning severity alerts</td></tr>
+      <tr><td class="cfg-key">WEATHER_ADVISORY_COLOR</td><td class="cfg-default">yellow</td><td class="cfg-desc">Color for advisory/watch alerts</td></tr>
+      <tr><td class="cfg-key">WEATHER_WARNING_EVERY_N_SCROLLS</td><td class="cfg-default">5</td><td class="cfg-desc">Show warning banner every N scroll cycles</td></tr>
+      <tr><td class="cfg-key">WEATHER_ADVISORY_EVERY_N_SCROLLS</td><td class="cfg-default">2</td><td class="cfg-desc">Show advisory banner every N scroll cycles</td></tr>
+      <tr><td class="cfg-key">WEATHER_STICKY_SEC</td><td class="cfg-default">20</td><td class="cfg-desc">Seconds to keep showing after alert clears</td></tr>
+      <tr><td class="cfg-key">WEATHER_REPEAT_SEC</td><td class="cfg-default">600</td><td class="cfg-desc">Re-announce active alert every N seconds</td></tr>
+      <tr><td class="cfg-key">WEATHER_FORCE_ACTIVE</td><td class="cfg-default">false</td><td class="cfg-desc">Force alert on for testing</td></tr>
+      <tr><td class="cfg-key">WEATHER_FORCE_TEXT</td><td class="cfg-default">""</td><td class="cfg-desc">Custom text when WEATHER_FORCE_ACTIVE is true</td></tr>
+    </table>
+
+    <h3 id="cfg-scoreboard">Scoreboard</h3>
+    <table class="cfg-table">
+      <tr><th>Key</th><th>Default</th><th>Description</th></tr>
+      <tr><td class="cfg-key">SCOREBOARD_ENABLED</td><td class="cfg-default">true</td><td class="cfg-desc">Enable/disable scoreboard entirely</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_LEAGUES</td><td class="cfg-default">["NHL","NFL"]</td><td class="cfg-desc">Which leagues to track</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_NHL_TEAMS</td><td class="cfg-default">["MTL"]</td><td class="cfg-desc">NHL team codes to track (e.g. MTL, TOR, BOS)</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_NFL_TEAMS</td><td class="cfg-default">[]</td><td class="cfg-desc">NFL team codes to track</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_PRECEDENCE</td><td class="cfg-default">auto</td><td class="cfg-desc">auto = scoreboard when live; force = always show if game active</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_ONLY_MY_TEAMS</td><td class="cfg-default">true</td><td class="cfg-desc">Only show games with your tracked teams</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_SHOW_COUNTDOWN</td><td class="cfg-default">true</td><td class="cfg-desc">Show pregame countdown timer</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_SHOW_CLOCK</td><td class="cfg-default">true</td><td class="cfg-desc">Show game clock in scoreboard</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_SHOW_SOG</td><td class="cfg-default">true</td><td class="cfg-desc">Show shots on goal on bottom row (NHL)</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_HOME_FIRST</td><td class="cfg-default">true</td><td class="cfg-desc">Show home team on left</td></tr>
+      <tr><td class="cfg-key">SCORE_ALERTS_ENABLED</td><td class="cfg-default">true</td><td class="cfg-desc">Enable goal/touchdown scroll alerts</td></tr>
+      <tr><td class="cfg-key">SCORE_ALERTS_NHL</td><td class="cfg-default">true</td><td class="cfg-desc">Fire alerts for NHL goals</td></tr>
+      <tr><td class="cfg-key">SCORE_ALERTS_NFL</td><td class="cfg-default">true</td><td class="cfg-desc">Fire alerts for NFL touchdowns</td></tr>
+      <tr><td class="cfg-key">SCORE_ALERTS_MY_TEAMS_ONLY</td><td class="cfg-default">true</td><td class="cfg-desc">Only alert for tracked team scores</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_TEST</td><td class="cfg-default">false</td><td class="cfg-desc">Enable test mode with synthetic game data</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_TEST_LEAGUE</td><td class="cfg-default">NHL</td><td class="cfg-desc">League for test game</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_TEST_HOME</td><td class="cfg-default">MTL</td><td class="cfg-desc">Home team code for test game</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_TEST_AWAY</td><td class="cfg-default">TOR</td><td class="cfg-desc">Away team code for test game</td></tr>
+    </table>
+
+    <h3 id="cfg-dim">Dimming</h3>
+    <table class="cfg-table">
+      <tr><th>Key</th><th>Default</th><th>Description</th></tr>
+      <tr><td class="cfg-key">NIGHT_MODE_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Enable automatic night dimming by time window</td></tr>
+      <tr><td class="cfg-key">NIGHT_MODE_START</td><td class="cfg-default">22:00</td><td class="cfg-desc">Night mode start time (HH:MM)</td></tr>
+      <tr><td class="cfg-key">NIGHT_MODE_END</td><td class="cfg-default">07:00</td><td class="cfg-desc">Night mode end time (HH:MM)</td></tr>
+      <tr><td class="cfg-key">NIGHT_MODE_DIM_PCT</td><td class="cfg-default">30</td><td class="cfg-desc">Brightness % during night (1–100)</td></tr>
+      <tr><td class="cfg-key">NIGHT_MODE_SPEED_PCT</td><td class="cfg-default">75</td><td class="cfg-desc">Scroll speed % during night (1–100)</td></tr>
+      <tr><td class="cfg-key">DIM_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Manual dimming override</td></tr>
+      <tr><td class="cfg-key">DIM_LEVEL</td><td class="cfg-default">off</td><td class="cfg-desc">off (100%), low (30%), medium (60%)</td></tr>
+      <tr><td class="cfg-key">DIM_SCHEDULE_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Enable scheduled dim windows</td></tr>
+      <tr><td class="cfg-key">DIM1_START / DIM1_END / DIM1_PCT</td><td class="cfg-default">-</td><td class="cfg-desc">First scheduled dim window (also DIM2, DIM3)</td></tr>
+      <tr><td class="cfg-key">SCHEDULE_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Blank display completely during off hours</td></tr>
+      <tr><td class="cfg-key">SCHEDULE_OFF_START</td><td class="cfg-default">23:00</td><td class="cfg-desc">Auto-off start time</td></tr>
+      <tr><td class="cfg-key">SCHEDULE_OFF_END</td><td class="cfg-default">07:00</td><td class="cfg-desc">Auto-off end time (display resumes)</td></tr>
+    </table>
+
+    <h3 id="cfg-clock">Clock Override</h3>
+    <table class="cfg-table">
+      <tr><th>Key</th><th>Default</th><th>Description</th></tr>
+      <tr><td class="cfg-key">CLOCK_24H</td><td class="cfg-default">true</td><td class="cfg-desc">24-hour format; false = 12-hour</td></tr>
+      <tr><td class="cfg-key">CLOCK_SHOW_SECONDS</td><td class="cfg-default">false</td><td class="cfg-desc">Include seconds in clock display</td></tr>
+      <tr><td class="cfg-key">CLOCK_BLINK_COLON</td><td class="cfg-default">true</td><td class="cfg-desc">Colon blinks every second</td></tr>
+      <tr><td class="cfg-key">CLOCK_COLOR</td><td class="cfg-default">yellow</td><td class="cfg-desc">Clock text color</td></tr>
+      <tr><td class="cfg-key">CLOCK_DATE_SHOW</td><td class="cfg-default">false</td><td class="cfg-desc">Show date line below time in clock mode</td></tr>
+      <tr><td class="cfg-key">CLOCK_DATE_FMT</td><td class="cfg-default">%a %b %d</td><td class="cfg-desc">strftime format for date (e.g. Mon Feb 15)</td></tr>
+      <tr><td class="cfg-key">CLOCK_DATE_COLOR</td><td class="cfg-default">white</td><td class="cfg-desc">Date line color</td></tr>
+    </table>
+
+    <h3 id="cfg-rgb">RGB Matrix Hardware</h3>
+    <table class="cfg-table">
+      <tr><th>Key</th><th>Default</th><th>Description</th></tr>
+      <tr><td class="cfg-key">RGB_BRIGHTNESS</td><td class="cfg-default">100</td><td class="cfg-desc">Hardware brightness 0–100 (set before init)</td></tr>
+      <tr><td class="cfg-key">RGB_HARDWARE_MAPPING</td><td class="cfg-default">adafruit-hat</td><td class="cfg-desc">GPIO adapter: adafruit-hat, regular, etc.</td></tr>
+      <tr><td class="cfg-key">RGB_GPIO_SLOWDOWN</td><td class="cfg-default">4</td><td class="cfg-desc">GPIO slowdown 0–4 (increase for stability on Pi 4)</td></tr>
+      <tr><td class="cfg-key">RGB_PWM_BITS</td><td class="cfg-default">11</td><td class="cfg-desc">PWM bit depth 1–11 (more = smoother color)</td></tr>
+      <tr><td class="cfg-key">RGB_CHAIN_LENGTH</td><td class="cfg-default">1</td><td class="cfg-desc">Number of panels chained together</td></tr>
+      <tr><td class="cfg-key">RGB_LED_RGB_SEQUENCE</td><td class="cfg-default">RGB</td><td class="cfg-desc">LED color channel order: RGB, RBG, GRB, etc.</td></tr>
+    </table>
+
+    <!-- OPERATIONS -->
+    <h2 id="operations">Operations</h2>
+
+    <h3 id="hot-reload">Hot-Reload System</h3>
+    <p>The main loop checks <code>config.json</code> modification time every frame. When a change is detected:</p>
+    <ul>
+      <li><strong>Market config</strong> (tickers, holdings, refresh) &rarr; Market worker restarts, holdings pushed to renderer immediately</li>
+      <li><strong>Weather config</strong> &rarr; Weather worker restarts</li>
+      <li><strong>Scoreboard config</strong> &rarr; Scoreboard worker restarts</li>
+      <li><strong>Dim / schedule config</strong> &rarr; Rendering globals updated immediately</li>
+      <li><strong>Override config</strong> &rarr; Override mode applies within one frame</li>
+      <li><strong>Message config</strong> &rarr; Message surface rebuilt immediately</li>
+      <li><strong>Layout changes</strong> &rarr; Scroll positions reset</li>
+    </ul>
+    <div class="callout warn">Layout and output mode changes (W, H, LAYOUT, OUTPUT_MODE) may require a full service restart to take full effect.</div>
+
+    <h3 id="adding-tickers">Adding / Removing Tickers</h3>
+    <p>In the web UI under <strong>Tickers (Top/Bottom)</strong>, enter one SYMBOL per line followed by its LABEL on the next line:</p>
+    <pre>^GSPC
+S&amp;P500
+BTC-USD
+Bitcoin
+AAPL
+Apple</pre>
+    <p>Common symbols: <code>^GSPC</code> (S&amp;P 500), <code>^DJI</code> (Dow), <code>^IXIC</code> (Nasdaq), <code>^VIX</code> (VIX), <code>CAD=X</code> (USD/CAD), <code>BTC-USD</code> (Bitcoin), <code>GC=F</code> (Gold), <code>VFV.TO</code>, <code>XEQT.TO</code></p>
+
+    <h3 id="testing">Testing Features</h3>
+    <h4>Test Scoreboard</h4>
+    <pre>"SCOREBOARD_TEST": true,
+"SCOREBOARD_TEST_LEAGUE": "NHL",
+"SCOREBOARD_TEST_HOME": "MTL",
+"SCOREBOARD_TEST_AWAY": "TOR",
+"SCOREBOARD_TEST_DURATION": 300</pre>
+    <h4>Test Weather Alert</h4>
+    <pre>"WEATHER_FORCE_ACTIVE": true,
+"WEATHER_FORCE_TEXT": "TEST WEATHER WARNING"</pre>
+    <h4>Test Score Alert</h4>
+    <pre>"SCORE_ALERTS_TEST": true,
+"SCORE_ALERTS_TEST_LEAGUE": "NHL",
+"SCORE_ALERTS_TEST_TEAM": "MTL"</pre>
+    <h4>Test Message</h4>
+    <pre>"MESSAGE_TEST_FORCE": true,
+"INJECT_MESSAGE": "*** TEST MESSAGE ***"</pre>
+    <h4>Debug Overlay</h4>
+    <pre>"DEBUG_OVERLAY": true</pre>
+    <p>Shows FPS, current state (TK/PR/SB), dim percentage, and layout on the bottom row.</p>
+
+    <h3 id="logs">Logs &amp; Log Markers</h3>
+    <p>View live logs:</p>
+    <pre>sudo journalctl -u led-ticker -n 50</pre>
+    <p>Follow live:</p>
+    <pre>sudo journalctl -u led-ticker -f</pre>
+    <h4>Key Log Markers</h4>
+    <div class="card">
+      <span class="marker start">[START]</span> Startup config dump — all active settings<br>
+      <span class="marker cfg">[CFG]</span> Hot-reload detected — which category changed<br>
+      <span class="marker preroll">[PREROLL]</span> Time preroll fired — style, color, duration<br>
+      <span class="marker alert">[ALERT]</span> Score alert queued (GOAL / TOUCHDOWN)<br>
+      <span class="marker goal">[GOAL FLASH]</span> Flash animation triggered on scoring<br>
+      <span class="marker weather">[WEATHER]</span> Weather alert status change<br>
+      <span class="marker sb">[SB-RX]</span> Scoreboard data received from worker<br>
+      <span class="marker rgb">[RGB Matrix]</span> LED matrix init / write status<br>
+      <span class="marker cfg">[MAIN]</span> Periodic loop status (every 300 frames)
+    </div>
+
+    <!-- REST API REFERENCE -->
+    <h2 id="api">REST API Reference</h2>
+    <p>The Flask web UI (<code>http://[pi-ip]:5080</code>) exposes a REST API for programmatic control. All JSON endpoints accept and return <code>application/json</code>. Action endpoints write to <code>config.json</code> which hot-reloads into the running ticker within ~1 second.</p>
+
+    <h3 id="api-config">Configuration</h3>
+
+    <h4>GET /api/config</h4>
+    <p>Returns the full <code>config.json</code> as a JSON object.</p>
+    <pre>curl http://pi-ip:5080/api/config</pre>
+
+    <h4>POST /api/config</h4>
+    <p>Replaces the entire <code>config.json</code> with the submitted JSON body. The ticker hot-reloads automatically.</p>
+    <pre>curl -X POST http://pi-ip:5080/api/config \
+  -H "Content-Type: application/json" \
+  -d '{"FPS": 30, "PPS_TOP": 25, "SCOREBOARD_TEST": true}'</pre>
+    <div class="callout warn">This <strong>replaces</strong> the full config. To change a single key, GET the config first, modify it, then POST the full object back.</div>
+
+    <h4>GET /raw</h4>
+    <p>Browser-based raw JSON editor page. POST to <code>/raw</code> saves changes.</p>
+
+    <h4>GET /overrides &amp; POST /overrides</h4>
+    <p>Browser-based override control page. POST accepts form fields: <code>OVERRIDE_MODE</code>, <code>OVERRIDE_DURATION_MIN</code>, <code>OVERRIDE_MESSAGE_TEXT</code>.</p>
+
+    <h3 id="api-status">Status &amp; Workers</h3>
+
+    <h4>GET /api/status</h4>
+    <p>Returns whether the systemd service is running.</p>
+    <pre>curl http://pi-ip:5080/api/status</pre>
+    <p>Response:</p>
+    <pre>{
+  "service_running": true,
+  "service_name": "led-ticker.service",
+  "timestamp": 1740000000
+}</pre>
+
+    <h4>GET /api/workers</h4>
+    <p>Returns per-worker health from <code>ticker_status.json</code>, including last update time, error messages, and fetch durations.</p>
+    <pre>curl http://pi-ip:5080/api/workers</pre>
+    <p>Response:</p>
+    <pre>{
+  "workers": {
+    "market": {
+      "status": "ok",
+      "market_state": "REGULAR",
+      "symbols_count": 13,
+      "symbols_failed": 0,
+      "fetch_duration_sec": 2.41,
+      "seconds_ago": 45
+    },
+    "weather": {
+      "status": "ok",
+      "severity": "none",
+      "seconds_ago": 120
+    },
+    "scoreboard": {
+      "status": "live",
+      "total_games": 1,
+      "live_games": 1,
+      "test_mode": false,
+      "seconds_ago": 12
+    }
+  },
+  "file_exists": true,
+  "timestamp": 1740000000
+}</pre>
+
+    <h3 id="api-actions">Quick Actions</h3>
+    <p>All action endpoints are <code>POST</code> only. They modify <code>config.json</code> and redirect to the home page (browser) or return a redirect (API). For headless use, follow redirects or ignore the response.</p>
+
+    <table>
+      <thead><tr><th>Endpoint</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /action/show-clock</code></td><td>Override to CLOCK mode for 5 minutes</td></tr>
+        <tr><td><code>POST /action/bright-mode</code></td><td>Override to BRIGHT (disable dimming) for 30 minutes</td></tr>
+        <tr><td><code>POST /action/clear-override</code></td><td>Clear any active override, return to normal ticker</td></tr>
+        <tr><td><code>POST /action/scoreboard-mode</code></td><td>Force scoreboard view until cleared</td></tr>
+        <tr><td><code>POST /action/maint-mode</code></td><td>Show maintenance message until cleared</td></tr>
+        <tr><td><code>POST /action/show-message</code></td><td>Show custom message for 5 min (form field: <code>message</code>)</td></tr>
+        <tr><td><code>POST /action/dim-low</code></td><td>Set dimming to 30%</td></tr>
+        <tr><td><code>POST /action/dim-medium</code></td><td>Set dimming to 60%</td></tr>
+        <tr><td><code>POST /action/dim-high</code></td><td>Set dimming to 100% (full brightness)</td></tr>
+        <tr><td><code>POST /action/stop-service</code></td><td>Stop the systemd ticker service</td></tr>
+        <tr><td><code>POST /restart</code></td><td>Restart the ticker service</td></tr>
+      </tbody>
+    </table>
+    <p>Example &mdash; show a custom message via curl:</p>
+    <pre>curl -X POST http://pi-ip:5080/action/show-message \
+  -d "message=Hello World"</pre>
+
+    <h3 id="api-preview">Live Preview</h3>
+
+    <h4>GET /preview</h4>
+    <p>Browser page with auto-refreshing live preview of the LED display.</p>
+
+    <h4>GET /preview.png</h4>
+    <p>Raw PNG image of the current display frame, scaled up. The ticker writes a snapshot to <code>/tmp/ticker_preview.png</code> every 10th frame (~3 FPS). Optional query param: <code>?scale=8</code>.</p>
+    <pre>curl -o snapshot.png http://pi-ip:5080/preview.png?scale=4</pre>
+    <p>Returns HTTP 503 if the ticker is not running or no preview is available yet.</p>
+
+    <!-- TROUBLESHOOTING -->
+    <h2 id="troubleshooting">Troubleshooting</h2>
+
+    <h3 id="ts-display">Display Issues</h3>
+    <h4>Black screen</h4>
+    <ol>
+      <li>Check service: <code>systemctl status led-ticker</code></li>
+      <li>Check logs: <code>sudo journalctl -u led-ticker -n 50</code></li>
+      <li>Verify <code>OUTPUT_MODE</code> is <code>RGBMATRIX</code></li>
+      <li>Check GPIO/HUB75 cable connections</li>
+      <li>Must run as root: <code>sudo python ticker.py</code></li>
+    </ol>
+    <h4>Partial display / wrong size</h4>
+    <ul>
+      <li>Check <code>W</code> and <code>H</code> values (should be 192x16)</li>
+      <li>Verify <code>LAYOUT</code> is <code>dual</code></li>
+      <li>Check <code>RGB_CHAIN_LENGTH</code> matches your hardware</li>
+    </ul>
+    <h4>Flickering</h4>
+    <ul>
+      <li>Reduce FPS (30 is good)</li>
+      <li>Increase <code>RGB_GPIO_SLOWDOWN</code> (try 3 or 4)</li>
+      <li>Check power supply amperage</li>
+    </ul>
+    <h4>Wrong colors</h4>
+    <ul>
+      <li>Adjust <code>RGB_LED_RGB_SEQUENCE</code> (try RBG, GRB, etc.)</li>
+    </ul>
+
+    <h3 id="ts-data">Data Issues</h3>
+    <h4>No market data (showing --)</h4>
+    <ol>
+      <li>Check internet: <code>ping 8.8.8.8</code></li>
+      <li>Check worker status in web UI (should be green)</li>
+      <li>Check logs for yfinance errors</li>
+      <li>Market data refreshes every 4 min; may take time after start</li>
+    </ol>
+    <h4>No scores</h4>
+    <ol>
+      <li>Verify <code>SCOREBOARD_ENABLED</code> is true</li>
+      <li>Check <code>SCOREBOARD_NHL_TEAMS</code> has your team code</li>
+      <li>Confirm there is actually a game today</li>
+      <li>Test with <code>SCOREBOARD_TEST: true</code></li>
+    </ol>
+    <h4>No weather alerts</h4>
+    <ol>
+      <li>Verify <code>WEATHER_RSS_URL</code> is correct for your region</li>
+      <li>Test with <code>WEATHER_FORCE_ACTIVE: true</code></li>
+      <li>Check weather worker status in web UI</li>
+      <li>Confirm real alerts are active in your area</li>
+    </ol>
+    <h4>Holdings not updating after save</h4>
+    <ul>
+      <li>This is now hot-reloadable — changes apply within ~1 second</li>
+      <li>Watch for <code>[CFG] Holdings updated</code> in logs</li>
+      <li>If not appearing, check config.json write permissions</li>
+    </ul>
+
+    <h3 id="ts-perf">Performance Issues</h3>
+    <h4>Slow/jerky scrolling</h4>
+    <ul>
+      <li>Check Night Mode isn't reducing speed unintentionally</li>
+      <li>Verify PPS values (top: 16, bot: 20 is typical)</li>
+      <li>Check CPU: <code>top</code> — should be under 50%</li>
+    </ul>
+    <h4>High CPU usage</h4>
+    <ul>
+      <li>Reduce FPS to 30</li>
+      <li>Ensure <code>USE_BUSY_LOOP</code> is false</li>
+      <li>Check for worker crash loops in logs</li>
+    </ul>
+    <h4>Config changes not applying</h4>
+    <ul>
+      <li>Wait ~2 seconds for hot-reload detection</li>
+      <li>Check file permissions: <code>ls -l config.json</code></li>
+      <li>Validate JSON: <code>python -m json.tool config.json</code></li>
+      <li>Try restart: <code>sudo systemctl restart led-ticker</code></li>
+    </ul>
+
+    <!-- FILE STRUCTURE -->
+    <h2 id="files">File Structure</h2>
+    <pre>/home/fpp/led-ticker/
+├── ticker.py              Main loop, state machine, worker management
+├── rendering.py           Drawing functions, fonts, dimming, LED output
+├── workers.py             Background data fetchers (market, weather, scoreboard)
+├── utils.py               Helpers: market hours, weather RSS, color parsing
+├── flask_ui.py            Web control panel on port 5080
+├── scoreboard_logos.py    Code-generated NHL/NFL team logos
+├── docs.html              This documentation file
+├── config.json            All configuration (hot-reloaded)
+├── ticker_status.json     Live worker status (written by workers)
+├── requirements.txt       Python dependencies
+└── venv/                  Virtual environment</pre>
+
+    <h4>Key Functions by File</h4>
+    <div class="card">
+      <strong>rendering.py:</strong> <code>build_time_surface()</code>, <code>build_row_surfaces_from_cache()</code>, <code>build_preroll_bigtime_surface()</code>, <code>render_fullheight_scoreboard()</code>, <code>apply_dimming_inplace()</code>, <code>write_surface_to_rgb_matrix()</code>, <code>parse_color()</code><br><br>
+      <strong>workers.py:</strong> <code>market_worker()</code>, <code>weather_worker()</code>, <code>scoreboard_worker()</code><br><br>
+      <strong>utils.py:</strong> <code>is_us_market_open()</code>, <code>get_market_event_announcement()</code>, <code>fetch_weather_warning()</code>, <code>update_worker_status()</code>
+    </div>
+
+    <!-- QUICK REFERENCE -->
+    <h2 id="quickref">Quick Reference</h2>
+    <div class="qref-grid">
+      <div class="qref-card">
+        <h4>Service Commands</h4>
+        <pre>sudo systemctl start led-ticker
+sudo systemctl stop led-ticker
+sudo systemctl restart led-ticker
+sudo systemctl status led-ticker</pre>
+      </div>
+      <div class="qref-card">
+        <h4>Log Commands</h4>
+        <pre>sudo journalctl -u led-ticker -n 50
+sudo journalctl -u led-ticker -f
+cat /home/fpp/led-ticker/ticker_status.json</pre>
+      </div>
+      <div class="qref-card">
+        <h4>Config Commands</h4>
+        <pre>nano /home/fpp/led-ticker/config.json
+python -m json.tool config.json</pre>
+      </div>
+      <div class="qref-card">
+        <h4>Color Names</h4>
+        <pre>white  yellow  green  red
+blue  magenta  cyan  grey</pre>
+        <h4 style="margin-top:10px">State Codes</h4>
+        <pre>TK = Ticker    PR = Preroll
+SB = Scoreboard</pre>
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>
