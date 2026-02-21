@@ -1,141 +1,186 @@
-# chromaticker
-The Chromatel Raspberry Pi LED Stock Ticker.
+# Chromatel Raspberry Pi LED Stock Ticker
 
-I built this project becuase I thought it would be super cool to have a stock ticker in my office and I didn't want to pay $4k for something with a subsctiption, so with a little copilot and claude and we made this. You will probably see in the code my current some sample portfolio I made up please don't consider that financial advice. 
+I built this project because I wanted a stock ticker in my office and wasn’t about to drop $4k on a commercial one with a subscription fee. With the help of Copilot and Claude, this project was born. You may see sample holdings or tickers in the code — **none of it is financial advice**.
 
-There is no security built in to this code and may introduce vulnerabilities. I would run this thing on a locked down vlan, the web ui has no authentication and I didn't want this thing to be to complex.
+Also this project was proudly ⚜️ Fabriqué au Québec ⚜️by an it specialist/ham operator/musician 
 
-Materials List - 
-Pi 4 
-Pi 4 poe hat
-Adafruit RBG Hub75 Hat
-64gb cheapo sd card
-2x These vevor premade signs. I canibalized them since they had the frame and the psu and the panels it was cleaner and easier to do that then buy panels. This is the exact item name VEVOR Programmable LED Sign, P10 Full Color Flexible Digital Scrolling Panel, DIY Custom Text Pattern GIF Display Board, Bluetooth APP Control Message Shop Sign for Store Business Advertising,40x8"
-2x 2020 Aluminium coupler thing to join the two vevor signs to make it a 1x6 panel sign.  You could technically chain as many as you want and make like a 365 wrap around but I didn't have the space. 
-Its stuck to the wall with a bunch of alien tape 
+⚠️ **Important:**  
+There is **no authentication or security** in this project. The Web UI is wide open.  
+Run this on an isolated VLAN or private network. Keep it simple, keep it safe.
 
+---
 
-ChromaTicker — Project Summary
-The LED Ticker is a multi‑process Python application designed for Raspberry Pi that drives a 192×16 HUB75 RGB LED matrix (or an HDMI-rendered pixel window). It displays real‑time market data, live sports scores, weather alerts, time prerolls, and custom messages, all managed through a sleek web-based control panel with hot‑reload configuration.
+## 🧰 Materials List
 
-✨ Key Capabilities
-Real‑Time Market Ticker
+What I used to build the physical ticker:
 
-Fetches live data using yfinance.
-Displays label, price, and percentage change (color‑coded).
-Supports portfolio/holdings mode, showing real-time market value instead of price.
-Status dot indicates market hours, data freshness, and team game days.
+- Raspberry Pi 4  
+- Raspberry Pi 4 PoE HAT  
+- Adafruit RGB HUB75 Matrix HAT  
+- 64GB SD card (cheap is fine)
+- **2× VEVOR programmable P10 RGB signs**  
+  Full product name:  
+  _“VEVOR Programmable LED Sign, P10 Full Color Flexible Digital Scrolling Panel, DIY Custom Text Pattern GIF Display Board, Bluetooth APP Control Message Shop Sign for Store Business Advertising, 40×8”_  
+  I canibalized these for their frames, PSUs, and panels.
+- 2020 aluminum connector/coupler (to join both signs into a single 192×16 panel)
+- Alien tape (yes, it actually holds)
 
-Live Sports Scoreboards
+You can chain more panels if you want a full 360° wraparound room ticker… but that’s between you and your wall space.
 
-Auto-switching full-height scoreboard when your tracked team is playing.
-Supports NHL and NFL via league APIs.
-Goal/touchdown animations with scrolling alerts.
-Compact scoreboard mode available inside ticker rows.
+---
 
-Environment Canada Weather Alerts
+# ChromaTicker — Project Summary
 
-Polls RSS feeds and displays full-width scrolling warnings/advisories.
-Color-coded severity levels.
-Includes sticky mode, repeat intervals, and test tools.
+**ChromaTicker** is a multi‑process Python application for Raspberry Pi that drives a **192×16 HUB75 RGB LED matrix** (or HDMI-rendered pixel window). It displays:
 
-Time Preroll Events
+- Real‑time stock market data  
+- Live NHL/NFL sports scores  
+- Environment Canada weather alerts  
+- Time prerolls  
+- Custom injected messages  
 
-Every top of the hour (and market open/close), shows large centered time or announcement.
-Configurable display style, duration, and scroll speed.
+A built‑in Web UI handles all configuration and updates instantly with **hot‑reload**.
 
-Override Modes
-Used for special displays, all accessible from the Web UI:
+---
 
-Clock Mode (large time only)
-Full Brightness
-Forced Scoreboard
-Custom Message Display
-Maintenance Screen
+## ✨ Key Features
 
-Overrides take priority over all normal states.
+### 📈 Real‑Time Market Ticker
+- Live updates via **yfinance**
+- Shows symbol label, price, and color‑coded percent change
+- Optional portfolio value mode (shares × price)
+- Status dot shows:
+  - Market open/closed
+  - Pre‑market status
+  - Data freshness
+  - Whether your tracked team plays today
 
-🧩 Architecture Overview
-The system is modular and process‑based:
-ticker.py (Main Loop + State Machine)
-├── market_worker → yfinance
-├── weather_worker → Environment Canada RSS
-└── scoreboard_worker → NHL/NFL APIs
-rendering.py → all drawing & matrix output
-flask_ui.py → config panel & REST API (port 5080)
-config.json → full hot-reloadable config
+### 🏒 Live Sports Scoreboards
+- Automatically activates full-height scoreboard when your team is playing
+- Supports NHL + NFL
+- Goal/touchdown flash animations + scrolling alerts
+- Compact scoreboard mode that fits inside ticker rows
 
-Each worker runs independently and communicates through multiprocessing queues.
-The main loop renders frames up to 60 FPS, composing pixel surfaces and pushing them to the LED matrix.
+### 🌩 Weather Alerts (Environment Canada)
+- Reads regional RSS alert feeds
+- Displays full‑width scrolling warnings/advisories
+- Severity‑colored messages (red/yellow)
+- Sticky mode, repeat intervals, and testing options
 
-🌐 Web Control Panel
-Accessible at:
-http://<pi-ip>:5080
+### 🕒 Time Preroll Events
+- Top‑of‑hour big clock display
+- Market open/close announcements
+- Customizable style, duration, color, and scroll speed
 
-Features:
+### 🚨 Override Modes
+From the Web UI:
+- **Clock Mode** (large centered clock)
+- **Full Brightness**
+- **Force Scoreboard**
+- **Custom Message Display**
+- **Maintenance Mode**
 
-Complete configuration editing (writes to config.json).
-Hot‑reload within ~1 second — no restarts required.
-Quick actions (Clock 5m, Bright 30m, Clear Override, Scoreboard Mode).
-Live preview window (/preview, /preview.png).
+Overrides are the highest‑priority state.
 
+---
 
-🛠 Configuration System
-All settings live in config.json, covering:
+## 🧩 Architecture Overview
 
-Display mode & layout (dual-row ticker, single-row, HDMI preview)
-Scroll speeds
-Market tickers & holdings
-Weather system
-Scoreboard settings
-Dimming schedules + Night Mode
-Overrides
-RGB matrix hardware options
+```
+ticker.py             Main loop + state machine
+├── market_worker     Fetches financial data via yfinance
+├── weather_worker    Fetches Environment Canada RSS alerts
+└── scoreboard_worker Fetches NHL/NFL game data
 
-Most changes apply instantly without restarting.
+rendering.py          Drawing, fonts, dimming, RGB matrix output
+flask_ui.py           Web UI + REST API (port 5080)
+config.json           Hot‑reload configuration
+```
 
-🚦 Display States
-The ticker always operates in one of several prioritized runtime states:
+Each worker runs independently and communicates via multiprocessing queues.  
+The renderer pushes frames to the LED panel at up to **60 FPS**.
 
-OV – Manual override
-Score Alert – Goal/touchdown banners
-PR – Preroll events
-SB – Live scoreboard
-TK – Normal ticker mode
+---
 
+## 🌐 Web Control Panel
 
-🔧 Testing & Debugging Tools
+**URL:** `http://<pi-ip>:5080`
 
-Built‑in test modes for weather, scoreboards, alerts, and messages.
-/raw editor for direct JSON editing.
-Systemd integration with journal logs.
-Debug overlay for FPS, state, dimming, and layout info.
+Includes:
+- Full configuration editor (`config.json`)
+- Hot‑reload within ~1 second
+- Quick actions (Clock 5m, Bright 30m, Clear Override, Force Scoreboard)
+- Live preview (`/preview`, `/preview.png`)
 
+---
 
-📁 Project File Structure
+## 🛠 Configuration System
+
+Everything lives in `config.json`:
+
+- Display mode + layout (dual-row, single-row, HDMI preview)
+- Scroll speeds
+- Market tickers + holdings
+- Weather system settings
+- Scoreboard league/team selection
+- Dimming + night mode schedules
+- Override parameters
+- RGB matrix hardware configuration
+
+Most settings apply instantly without restarting.
+
+---
+
+## 🚦 Display States
+
+The ticker always runs in one of these prioritized states:
+
+1. **Override (OV)**  
+2. **Score Alert** (goal/touchdown banner)  
+3. **Preroll (PR)**  
+4. **Scoreboard (SB)**  
+5. **Ticker (TK)**  
+
+---
+
+## 🔧 Testing & Debugging Tools
+
+- Test scoreboard, weather alerts, score events, and messages  
+- `/raw` JSON editor  
+- Systemd logging (`journalctl`)  
+- Debug overlay showing FPS, state, dim %, and layout  
+
+---
+
+## 📁 Project File Structure
+
+```
 led-ticker/
 ├── ticker.py              # Main loop + state machine
 ├── rendering.py           # Drawing, fonts, dimming, output
 ├── workers.py             # Market, weather, scoreboard fetchers
 ├── scoreboard_logos.py    # Auto-generated NHL/NFL logos
-├── flask_ui.py            # Web UI & REST API
-├── config.json            # Full system configuration (hot reload)
+├── flask_ui.py            # Web UI + REST API
+├── config.json            # System configuration (hot reload)
 ├── ticker_status.json     # Worker health/status
-├── docs.html              # Full built-in documentation
+├── docs.html              # Documentation
 ├── requirements.txt
 └── venv/                  # Python virtual environment
+```
 
+---
 
-🚀 Summary
-The LED Ticker is a fully customizable micro‑information display system for Raspberry Pi, combining:
+## 🚀 Summary
 
-Real‑time financial data
-Sports intelligence
-Weather alerting
-Time displays
-Automated dimming
-Hot‑reload configuration
-Web-based management
-Multi-process performance
+**ChromaTicker** is a customizable, always‑on information display for Raspberry Pi, featuring:
 
-It was built for reliability, fast feedback, and seamless daily use in an office, home lab, or operations center.
+- Real-time market tracking  
+- Live sports intelligence  
+- Weather alerting  
+- Automated dimming  
+- Time-based prerolls  
+- Instant configuration updates  
+- Web-based control  
+- Multi-process architecture  
+
+Designed for reliability, responsiveness, and everyday use in an office, home lab, or ham shack.
