@@ -1,0 +1,245 @@
+{
+  "OVERRIDE_MODE": "OFF",
+  "OVERRIDE_DURATION_MIN": 0,
+  "OVERRIDE_MESSAGE_TEXT": "",
+  "OUTPUT_MODE": "HDMI",
+  "MODEL_NAME": "Matrix192x16",
+  "W": 192,
+  "H": 16,
+  "LAYOUT": "dual",
+  "TICKER_TZ": "America/Toronto",
+  "MICROFONT_ENABLED": true,
+  "TICKER_SCALE": 8,
+  "FORCE_KMS": false,
+  "USE_SDL_SCALED": true,
+  "USE_BUSY_LOOP": false,
+  "RGB_BRIGHTNESS": 100,
+  "RGB_HARDWARE_MAPPING": "regular",
+  "RGB_GPIO_SLOWDOWN": 4,
+  "RGB_PWM_BITS": 11,
+  "RGB_PWM_LSB_NANOSECONDS": 130,
+  "RGB_CHAIN_LENGTH": 6,
+  "RGB_PARALLEL": 1,
+  "RGB_SCAN_MODE": 0,
+  "RGB_ROW_ADDRESS_TYPE": 0,
+  "RGB_MULTIPLEXING": 0,
+  "RGB_LED_RGB_SEQUENCE": "RGB",
+  "RGB_PIXEL_MAPPER": "",
+  "RGB_PANEL_TYPE": "",
+  "FPS": 30,
+  "PPS_TOP": 30.0,
+  "PPS_BOT": 30.0,
+  "PPS_SINGLE": 20.0,
+  "REFRESH_SEC": 240,
+  "FRESH_SEC": 300,
+  "TICKERS_TOP": [
+    [
+      "^IXIC",
+      "NAS"
+    ],
+    [
+      "^GSPC",
+      "S&P"
+    ],
+    [
+      "^GSPTSE",
+      "TSX"
+    ],
+    [
+      "^DJI",
+      "DOW"
+    ],
+    [
+      "GC=F",
+      "GOLD"
+    ],
+    [
+      "CADUSD=X",
+      "CAD"
+    ]
+  ],
+  "TICKERS_BOT": [
+    [
+      "XEQT.TO",
+      "XEQT"
+    ],
+    [
+      "VDY.TO",
+      "VDY"
+    ],
+    [
+      "TGRO.TO",
+      "TGRO"
+    ],
+    [
+      "XST.TO",
+      "XST"
+    ],
+    [
+      "QQC.TO",
+      "QQC"
+    ],
+    [
+      "KILO.TO",
+      "KILO"
+    ],
+    [
+      "VEF.TO",
+      "VEF"
+    ]
+  ],
+  "HOLDINGS_ENABLED": true,
+  "HOLDINGS": {
+    "XEQT.TO": {
+      "shares": 1
+    },
+    "VDY.TO": {
+      "shares": 1
+    },
+    "XST.TO": {
+      "shares": 1
+    },
+    "QQC.TO": {
+      "shares": 1
+    },
+    "KILO.TO": {
+      "shares": 1
+    },
+    "VEF.TO": {
+      "shares": 1
+    },
+    "TGRO.TO": {
+      "shares": 1
+    }
+  },
+  "TIME_PREROLL_ENABLED": true,
+  "TIME_PREROLL_SEC": 15,
+  "PREROLL_STYLE": "bigtime",
+  "PREROLL_COLOR": "yellow",
+  "PREROLL_PPS": 32.0,
+  "INJECT_MESSAGE": "*** DEV MODE ***",
+  "MESSAGE_EVERY": 0,
+  "MESSAGE_ROW": "auto",
+  "MESSAGE_COLOR": "magenta",
+  "MESSAGE_TEST_FORCE": false,
+  "WEATHER_RSS_URL": "https://weather.gc.ca/rss/alerts/45.529_-73.562_e.xml",
+  "WEATHER_ANNOUNCE_SEC": 60,
+  "WEATHER_REFRESH_SEC": 300,
+  "WEATHER_INCLUDE_WATCH": true,
+  "WEATHER_FORCE_ACTIVE": false,
+  "WEATHER_FORCE_TEXT": "WX ALERT TEST",
+  "WEATHER_TIMEOUT": 5.0,
+  "WEATHER_TEST_DELAY": 0,
+  "WEATHER_TEST_STICKY_TOTAL": 60,
+  "WEATHER_STICKY_SEC": 20,
+  "WEATHER_WARNING_EVERY_N_SCROLLS": 5,
+  "WEATHER_WARNING_COLOR": "red",
+  "WEATHER_ADVISORY_EVERY_N_SCROLLS": 10,
+  "WEATHER_ADVISORY_COLOR": "yellow",
+  "SCHEDULE_ENABLED": false,
+  "SCHEDULE_OFF_START": "23:00",
+  "SCHEDULE_OFF_END": "07:00",
+  "SCHEDULE_BLANK_FPS": 5,
+  "SCHEDULE_TEST_FORCE_OFF": false,
+  "DIM_ENABLED": true,
+  "DIM_LEVEL": "off",
+  "DIM_CUSTOM_PCT": 0,
+  "DIM_SCHEDULE_ENABLED": false,
+  "DIM1_START": "",
+  "DIM1_END": "",
+  "DIM1_PCT": 30,
+  "DIM2_START": "",
+  "DIM2_END": "",
+  "DIM2_PCT": 60,
+  "DIM3_START": "",
+  "DIM3_END": "",
+  "DIM3_PCT": 100,
+  "DIM_TEST_ENABLED": false,
+  "DIM_TEST_PCT": 100,
+  "NIGHT_MODE_ENABLED": true,
+  "NIGHT_MODE_START": "20:00",
+  "NIGHT_MODE_END": "07:00",
+  "NIGHT_MODE_DIM_PCT": 30,
+  "NIGHT_MODE_SPEED_PCT": 30,
+  "FONT_FAMILY_BASE": "DejaVuSansMono",
+  "FONT_FAMILY_SCOREBOARD": "DejaVuSansMono",
+  "FONT_FAMILY_DEBUG": "DejaVuSansMono",
+  "FONT_SIZE_ROW": "auto",
+  "FONT_SIZE_SB": "auto",
+  "FONT_SIZE_DEBUG": "auto",
+  "FONT_BOLD_BASE": true,
+  "FONT_BOLD_SB": false,
+  "FONT_BOLD_DEBUG": false,
+  "PREROLL_FONT_FAMILY": "DejaVuSansMono",
+  "PREROLL_FONT_PX": 0,
+  "PREROLL_FONT_BOLD": true,
+  "MAINT_FONT_FAMILY": "DejaVuSansMono",
+  "MAINT_FONT_PX": 0,
+  "MAINT_FONT_BOLD": true,
+  "SCOREBOARD_ENABLED": true,
+  "SCOREBOARD_LEAGUES": [
+    "NHL",
+    "NFL"
+  ],
+  "SCOREBOARD_NHL_TEAMS": [
+    "MTL"
+  ],
+  "SCOREBOARD_NFL_TEAMS": [
+    "NE"
+  ],
+  "SCOREBOARD_POLL_WINDOW_MIN": 120,
+  "SCOREBOARD_POLL_CADENCE": 60,
+  "SCOREBOARD_LIVE_REFRESH": 45,
+  "SCOREBOARD_PRECEDENCE": "normal",
+  "SCOREBOARD_LAYOUT": "auto",
+  "SCOREBOARD_UPPERCASE": true,
+  "SCOREBOARD_HOME_FIRST": true,
+  "SCOREBOARD_SHOW_CLOCK": true,
+  "SCOREBOARD_SHOW_SOG": false,
+  "SCOREBOARD_SHOW_POSSESSION": true,
+  "SCOREBOARD_INCLUDE_OTHERS": false,
+  "SCOREBOARD_ONLY_MY_TEAMS": true,
+  "SCOREBOARD_MAX_GAMES": 2,
+  "SCOREBOARD_SCROLL_ENABLED": false,
+  "SCOREBOARD_STATIC_DWELL_SEC": 4,
+  "SCOREBOARD_STATIC_ALIGN": "left",
+  "SCOREBOARD_TEST": false,
+  "SCOREBOARD_TEST_LEAGUE": "NHL",
+  "SCOREBOARD_TEST_HOME": "MTL",
+  "SCOREBOARD_TEST_AWAY": "BOS",
+  "SCOREBOARD_TEST_DURATION": 0,
+  "SCORE_ALERTS_ENABLED": true,
+  "SCORE_ALERTS_NHL": true,
+  "SCORE_ALERTS_NFL": true,
+  "SCORE_ALERTS_MY_TEAMS_ONLY": true,
+  "SCORE_ALERTS_CYCLES": 2,
+  "SCORE_ALERTS_QUEUE_MAX": 4,
+  "SCORE_ALERTS_FLASH_MS": 250,
+  "SCORE_ALERTS_FLASH_COLORS": [
+    "red",
+    "white",
+    "blue"
+  ],
+  "SCORE_ALERTS_NFL_TD_DELTA_MIN": 6,
+  "SCORE_ALERTS_TEST": false,
+  "SCORE_ALERTS_TEST_LEAGUE": "NHL",
+  "SCORE_ALERTS_TEST_TEAM": "MTL",
+  "SCORE_ALERTS_TEST_INTERVAL_SEC": 5,
+  "CLOCK_24H": true,
+  "CLOCK_SHOW_SECONDS": false,
+  "CLOCK_BLINK_COLON": true,
+  "CLOCK_COLOR": "yellow",
+  "CLOCK_DATE_SHOW": false,
+  "CLOCK_DATE_FMT": "%a %b %d",
+  "CLOCK_DATE_COLOR": "white",
+  "MAINTENANCE_MODE": false,
+  "MAINTENANCE_SCROLL": true,
+  "MAINTENANCE_PPS": 24.0,
+  "MAINTENANCE_TEXT": "*** SYSTEM OFFLINE PLEASE STANDBY ***",
+  "DEMO_MODE": false,
+  "DEBUG_OVERLAY": false,
+  "WEATHER_REPEAT_SEC": 30,
+  "SCOREBOARD_PREGAME_WINDOW_MIN": 30,
+  "SCOREBOARD_POSTGAME_DELAY_MIN": 5,
+  "SCOREBOARD_SHOW_COUNTDOWN": true
+}
