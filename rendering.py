@@ -9,6 +9,7 @@ Supports rpi-rgb-led-matrix for direct HUB75 driving.
 """
 import pygame
 import os
+import time
 from datetime import datetime, time as dtime
 from multiprocessing import Queue
 import queue as queue_std
@@ -355,19 +356,11 @@ def init_rgb_matrix(width=192, height=16, brightness=100, hardware_mapping='adaf
     """
     global RGB_MATRIX, RGB_CANVAS
     
-    print(f"[RGB Matrix] Starting initialization...", flush=True)
-    print(f"[RGB Matrix] Params: {width}x{height}, brightness={brightness}, hw={hardware_mapping}", flush=True)
-    if chain_length > 1:
-        print(f"[RGB Matrix] Chain: {chain_length} panels, Parallel: {parallel}", flush=True)
-    if pixel_mapper:
-        print(f"[RGB Matrix] Pixel Mapper: {pixel_mapper}", flush=True)
-    
+    print(f"[RGB Matrix] Initializing {width}x{height}, brightness={brightness}, hw={hardware_mapping}", flush=True)
+
     try:
-        print("[RGB Matrix] Importing rgbmatrix module...", flush=True)
         from rgbmatrix import RGBMatrix, RGBMatrixOptions
-        print("[RGB Matrix] Module imported successfully", flush=True)
-        
-        print("[RGB Matrix] Creating options...", flush=True)
+
         options = RGBMatrixOptions()
         options.rows = height
         options.cols = width
@@ -379,7 +372,7 @@ def init_rgb_matrix(width=192, height=16, brightness=100, hardware_mapping='adaf
         options.disable_hardware_pulsing = False
         options.show_refresh_rate = False
         options.drop_privileges = False
-        
+
         # Advanced panel configuration
         options.chain_length = chain_length
         options.parallel = parallel
@@ -392,21 +385,12 @@ def init_rgb_matrix(width=192, height=16, brightness=100, hardware_mapping='adaf
             options.pixel_mapper_config = pixel_mapper
         if panel_type:
             options.panel_type = panel_type
-        
-        print("[RGB Matrix] Options configured", flush=True)
-        
-        print("[RGB Matrix] Creating RGBMatrix object...", flush=True)
+
         RGB_MATRIX = RGBMatrix(options=options)
-        print("[RGB Matrix] RGBMatrix created", flush=True)
-        
-        print("[RGB Matrix] Creating frame canvas...", flush=True)
         RGB_CANVAS = RGB_MATRIX.CreateFrameCanvas()
-        print("[RGB Matrix] Canvas created", flush=True)
-        
-        print(f"[RGB Matrix] Initialized {width}x{height} matrix", flush=True)
-        print(f"[RGB Matrix] Hardware: {hardware_mapping}, Brightness: {brightness}%", flush=True)
-        if chain_length > 1 or parallel > 1:
-            print(f"[RGB Matrix] Configuration: {chain_length} chained x {parallel} parallel = {width*chain_length}x{height*parallel} total", flush=True)
+
+        chain_info = f", chain={chain_length}x{parallel}" if (chain_length > 1 or parallel > 1) else ""
+        print(f"[RGB Matrix] Ready: {width}x{height} brightness={brightness}% hw={hardware_mapping}{chain_info}", flush=True)
         return True
         
     except ImportError as e:
@@ -420,39 +404,52 @@ def init_rgb_matrix(width=192, height=16, brightness=100, hardware_mapping='adaf
         return False
 
 
+_rgb_dim_warn_ts = 0.0
+_rgb_err_ts = 0.0
+_rgb_init_warn_ts = 0.0
+
 def write_surface_to_rgb_matrix(surf):
     """
     Write pygame surface to RGB Matrix.
     Returns True on success, False on failure.
     """
-    global RGB_CANVAS, RGB_MATRIX
-    
+    global RGB_CANVAS, RGB_MATRIX, _rgb_dim_warn_ts, _rgb_err_ts, _rgb_init_warn_ts
+
     if RGB_MATRIX is None or RGB_CANVAS is None:
-        print("[RGB Matrix] ERROR: Matrix not initialized", flush=True)
+        now = time.time()
+        if now - _rgb_init_warn_ts >= 10.0:
+            print("[RGB Matrix] ERROR: Matrix not initialized", flush=True)
+            _rgb_init_warn_ts = now
         return False
-    
+
     try:
         w, h = surf.get_width(), surf.get_height()
         if (w, h) != (W, H):
-            print(f"[RGB Matrix] Dimension mismatch: expected {W}x{H}, got {w}x{h}", flush=True)
+            now = time.time()
+            if now - _rgb_dim_warn_ts >= 10.0:
+                print(f"[RGB Matrix] Dimension mismatch: expected {W}x{H}, got {w}x{h}", flush=True)
+                _rgb_dim_warn_ts = now
             return False
-        
+
         # Convert pygame surface to RGB pixel array
         pixels = pygame.surfarray.array3d(surf)
-        
+
         # Write pixels to RGB Matrix canvas
         for y in range(h):
             for x in range(w):
                 r, g, b = pixels[x, y]
                 RGB_CANVAS.SetPixel(x, y, int(r), int(g), int(b))
-        
+
         # Swap the canvas to display
         RGB_CANVAS = RGB_MATRIX.SwapOnVSync(RGB_CANVAS)
-        
+
         return True
-        
+
     except Exception as e:
-        print(f"[RGB Matrix] ERROR writing to matrix: {e}", flush=True)
+        now = time.time()
+        if now - _rgb_err_ts >= 10.0:
+            print(f"[RGB Matrix] ERROR writing to matrix: {e}", flush=True)
+            _rgb_err_ts = now
         return False
 
 
@@ -479,24 +476,16 @@ def init_pygame():
         os.environ["SDL_VIDEODRIVER"] = "dummy"
         os.environ["SDL_AUDIODRIVER"] = "dummy"
         
-        print("[PYGAME] Initializing pygame for RGBMATRIX mode...", flush=True)
-        
-        # Try the absolute minimum - just what we need for fonts and surfaces
+        # Minimal init for RGBMATRIX mode - just fonts and surfaces
         try:
-            print("[PYGAME] Init display...", flush=True)
             pygame.display.init()
-            print("[PYGAME] Init font...", flush=True)
             pygame.font.init()
-            print("[PYGAME] Creating clock...", flush=True)
             clock = pygame.time.Clock()
-            print("[PYGAME] Creating surface...", flush=True)
             screen = pygame.Surface((W, H))
-            print("[PYGAME] Pygame initialized successfully for RGBMATRIX mode", flush=True)
+            print(f"[PYGAME] Initialized for RGBMATRIX mode ({W}x{H})", flush=True)
             return screen, clock, False
         except Exception as e:
-            print(f"[PYGAME] Error during init: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
+            print(f"[PYGAME] Init error: {e}", flush=True)
             raise
     else:
         # HDMI mode - create display window
@@ -771,8 +760,8 @@ def render_fullheight_scoreboard(frame, game_data, font_big, flash_home=False, f
                 away_logo = render_logo_to_surface(away_logo_code, 32, 16)
                 frame.blit(home_logo, (0, 0))
                 frame.blit(away_logo, (160, 0))
-            except Exception as e:
-                print(f"[SB] Logo error: {e}", flush=True)
+            except Exception:
+                pass  # Logo rendering is best-effort
         # Logos not available - team codes will show via score text
         # Render scores
         score_color_home = flash_color if flash_home else (255, 255, 255)
@@ -798,8 +787,8 @@ def render_fullheight_scoreboard(frame, game_data, font_big, flash_home=False, f
                 period_x = 48 + (96 - period_text.get_width()) // 2
                 period_y = H_local - period_text.get_height()
                 frame.blit(period_text, (period_x, period_y))
-            except Exception as e:
-                print(f"[SB] Period render error: {e}", flush=True)
+            except Exception:
+                pass
     else:
         score_color_home = flash_color if flash_home else (255, 255, 255)
         score_color_away = flash_color if flash_away else (255, 255, 255)

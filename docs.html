@@ -194,7 +194,7 @@ config.json   → all settings (hot-reloaded on change)</pre>
     <h3 id="states">Display States</h3>
     <p>The ticker operates in one of three states at any time:</p>
     <div class="card">
-      <span class="state-badge state-tk">TK</span> <strong>Ticker</strong> &mdash; Normal operation. Scrolling market data on top and bottom rows.<br><br>
+      <span class="state-badge state-tk">TK</span> <strong>Ticker</strong> &mdash; Normal operation. Scrolling market data (dual: two independent rows; single: one full-height row).<br><br>
       <span class="state-badge state-pr">PR</span> <strong>Preroll</strong> &mdash; Top-of-hour or market event. Large centered time or scrolling announcement.<br><br>
       <span class="state-badge state-sb">SB</span> <strong>Scoreboard</strong> &mdash; A tracked team has a live game. Full-screen score display with logos.<br><br>
       <span class="state-badge state-ov">OV</span> <strong>Override</strong> &mdash; Manual mode activated from web UI (Clock, Bright, Message, Maint, Scoreboard).
@@ -238,6 +238,7 @@ XEQT.TO=1.2431</pre>
       <tr><td class="cfg-key">PREROLL_PPS</td><td class="cfg-default">40.0</td><td class="cfg-desc">Pixels/second for MARQUEE style</td></tr>
     </table>
     <p>Market events (<code>*** MARKET OPEN ***</code> / <code>*** MARKET CLOSED ***</code>) fire once per day and are not repeated.</p>
+    <p>Additionally, a periodic market status announcement is injected into the ticker every 5 minutes (e.g., market open/closed status). This appears in the top row in dual mode or in the single row in single mode.</p>
 
     <h3 id="scoreboard">Live Scoreboard</h3>
     <p>When a tracked team has a live game, the ticker automatically switches to a full-height scoreboard showing team logos, scores, period, and game clock. Goals trigger a red/white/blue flash animation and a score alert scrolls across the display.</p>
@@ -248,7 +249,7 @@ XEQT.TO=1.2431</pre>
     </ul>
     <h4>Scoreboard Display Modes</h4>
     <p><strong>Full-Height (192x16):</strong> Team logos on each side (32px), large score in center, clock and period. Score flash animation on goal.</p>
-    <p><strong>Compact (in ticker rows):</strong> <code>MTL 3 - TOR 2 (P3 5:42)</code> on top row, SOG or possession on bottom row.</p>
+    <p><strong>Compact (in ticker rows):</strong> <code>MTL 3 - TOR 2 (P3 5:42)</code> on top row (dual) or single row, SOG or possession on bottom row (dual only).</p>
     <h4>Key Settings</h4>
     <pre>"SCOREBOARD_ENABLED": true,
 "SCOREBOARD_LEAGUES": ["NHL","NFL"],
@@ -262,7 +263,7 @@ XEQT.TO=1.2431</pre>
     </div>
 
     <h3 id="weather">Weather Alerts</h3>
-    <p>Polls Environment Canada RSS feed for your region. When an active warning, advisory, or watch is found, it scrolls as a full-height banner across the display.</p>
+    <p>Polls Environment Canada RSS feed for your region. When an active warning, advisory, or watch is found, it scrolls as a full-height banner across the display. Works in both dual and single layout modes.</p>
     <h4>Alert Severity Behavior</h4>
     <ul>
       <li><strong>Warning</strong> &mdash; Red text, shows every N warning scrolls (default: 5)</li>
@@ -283,7 +284,7 @@ XEQT.TO=1.2431</pre>
     <p>Inject a custom message that appears every N scroll cycles. Useful for announcements or labels.</p>
     <pre>"INJECT_MESSAGE": "*** DEV MODE ***",
 "MESSAGE_EVERY": 5,        // 0 = disabled
-"MESSAGE_ROW": "auto",     // top / bottom / both / auto
+"MESSAGE_ROW": "auto",     // top / bottom / both / single / auto
 "MESSAGE_COLOR": "magenta",
 "MESSAGE_TEST_FORCE": false</pre>
 
@@ -328,7 +329,7 @@ XEQT.TO=1.2431</pre>
       <tr><td class="cfg-key">MODEL_NAME</td><td class="cfg-default">Matrix192x16</td><td class="cfg-desc">Panel model preset for auto W/H</td></tr>
       <tr><td class="cfg-key">W</td><td class="cfg-default">192</td><td class="cfg-desc">Panel width in pixels (0 = auto from MODEL_NAME)</td></tr>
       <tr><td class="cfg-key">H</td><td class="cfg-default">16</td><td class="cfg-desc">Panel height in pixels (0 = auto)</td></tr>
-      <tr><td class="cfg-key">LAYOUT</td><td class="cfg-default">dual</td><td class="cfg-desc">dual (two 8px rows) or single (one 16px row)</td></tr>
+      <tr><td class="cfg-key">LAYOUT</td><td class="cfg-default">dual</td><td class="cfg-desc">dual (two 8px rows) or single (one 16px row). Both modes support all features: weather alerts, market announcements, score alerts, preroll, and messages</td></tr>
       <tr><td class="cfg-key">FPS</td><td class="cfg-default">30</td><td class="cfg-desc">Render loop frames per second</td></tr>
       <tr><td class="cfg-key">TICKER_SCALE</td><td class="cfg-default">8</td><td class="cfg-desc">Scale multiplier for HDMI preview window</td></tr>
       <tr><td class="cfg-key">TICKER_TZ</td><td class="cfg-default">America/Montreal</td><td class="cfg-desc">Timezone for clock, preroll, and market hours</td></tr>
@@ -614,7 +615,7 @@ Apple</pre>
     <h4>Partial display / wrong size</h4>
     <ul>
       <li>Check <code>W</code> and <code>H</code> values (should be 192x16)</li>
-      <li>Verify <code>LAYOUT</code> is <code>dual</code></li>
+      <li>Verify <code>LAYOUT</code> matches your setup (<code>dual</code> or <code>single</code>)</li>
       <li>Check <code>RGB_CHAIN_LENGTH</code> matches your hardware</li>
     </ul>
     <h4>Flickering</h4>

@@ -60,7 +60,6 @@ def market_worker(all_syms, refresh_sec, out_q: Queue, status_path=None, tzinfo=
         snapshot = {"ts": time.time(), "data": {}, "market_state": "UNKNOWN", "ok_any": False}
         any_ok = False
         market_state = "UNKNOWN"
-        fetch_error = False
         error_msg = ""
 
         # Try to get market state from S&P 500 first
@@ -71,7 +70,6 @@ def market_worker(all_syms, refresh_sec, out_q: Queue, status_path=None, tzinfo=
                 yf_state = fi.get("market_state", "UNKNOWN") or "UNKNOWN"
                 market_state = yf_state.upper()
         except Exception as e:
-            fetch_error = True
             error_msg = f"S&P fetch failed: {str(e)[:50]}"
 
         # If yfinance doesn't give us a clear state, use time-based detection
@@ -124,8 +122,8 @@ def market_worker(all_syms, refresh_sec, out_q: Queue, status_path=None, tzinfo=
 
         try:
             put_latest(out_q, {"type": "market", "payload": snapshot})
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[MARKET] Queue put failed: {e}", flush=True)
 
         time.sleep(max(5, refresh_sec))
 
@@ -139,7 +137,6 @@ def weather_worker(rss_url, include_watch, refresh_sec, timeout_s, force_active,
 
     while True:
         fetch_start = time.time()
-        now = time.time()
         error_msg = None
         try:
             if force_active:
@@ -170,9 +167,9 @@ def weather_worker(rss_url, include_watch, refresh_sec, timeout_s, force_active,
             })
 
         try:
-            put_latest(out_q, {"type": "weather", "payload": {"ts": now, "active": bool(active), "message": msg, "severity": severity}})
-        except Exception:
-            pass
+            put_latest(out_q, {"type": "weather", "payload": {"ts": time.time(), "active": bool(active), "message": msg, "severity": severity}})
+        except Exception as e:
+            print(f"[WEATHER] Queue put failed: {e}", flush=True)
 
         time.sleep(max(10, refresh_sec))
 
@@ -344,8 +341,6 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
             payloads = []
 
             if test_mode and (test_until is None or now <= test_until):
-                if int(now) % 5 == 0:
-                    print(f"[SB-TEST] Emitting test payload: league={test_league} home={auto_home} away={auto_away}", flush=True)
                 elapsed = int(now % 600)
                 home_score = elapsed // 120
                 away_score = (elapsed // 180)
@@ -517,13 +512,13 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
 
             any_live = any(any(g["state"] == "LIVE" for g in p.get("games", [])) for p in payloads)
             any_window = any(any(g["state"] == "PREGAME" for g in p.get("games", [])) for p in payloads)
-            cadence = live_cadence if any_live else (pre_cadence if any_window else pre_cadence)
+            cadence = live_cadence if any_live else pre_cadence
 
             for p in payloads:
                 try:
                     put_latest(out_q, {"type":"scoreboard","payload":p})
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[SB] Queue put failed: {e}", flush=True)
 
             # Update status file
             total_games = sum(len(p.get("games", [])) for p in payloads)
