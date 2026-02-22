@@ -1,6 +1,7 @@
 Copyright (c) 2026 Solutions Reseaux Chromatel
 
-Permission is granted to use, copy, modify, and share this software for non-commercial purposes only, provided that proper credit is given to the original author.
+Permission is granted to use, copy, modify, and share this software for non-commercial
+purposes only, provided that proper credit is given to the original author.
 
 You may:
 - View the source code.
@@ -11,6 +12,14 @@ You may NOT:
 - Use this software or any derivative works for commercial purposes.
 - Sell this software or any modified versions.
 - Remove or alter the copyright notice.
-- Claim this software or any derivative as your own.
+- Claim this software or any derivative work as your own.
 
-The source code of any shared non-commercial modifications must remain publicly visible and accessible, and must retain this license notice.
+Third-Party Components:
+This project may include or depend on third-party packages, modules, or libraries.
+All such third-party components remain the property of their respective owners.
+I do not claim any ownership over third-party code, nor does this license grant any
+rights to third-party components beyond what their original licenses allow.
+
+Source Availability:
+The source code of any distributed non-commercial modifications must remain publicly
+visible and accessible, and must retain this license notice.
