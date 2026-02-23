@@ -56,19 +56,13 @@ FONT_BOLD_DEBUG = False
 PREROLL_FONT_BOLD = True
 MAINT_FONT_BOLD = True
 
-# DIM variables
-DIM_TEST_ENABLED = False
-DIM_TEST_PCT = 100
+# Night Mode variables
 NIGHT_MODE_ENABLED = False
 NIGHT_MODE_START = "22:00"
 NIGHT_MODE_END = "07:00"
 NIGHT_MODE_DIM_PCT = 30
 NIGHT_MODE_SPEED_PCT = 75
-
-SCHEDULE_ENABLED = False
-SCHEDULE_TEST_FORCE_OFF = False
-SCHEDULE_OFF_START = "23:00"
-SCHEDULE_OFF_END = "07:00"
+QUICK_DIM_PCT = 0  # Quick brightness override (1-100); 0 = disabled, uses normal night-mode logic
 
 FORCE_KMS = False
 USE_SDL_SCALED = True
@@ -209,22 +203,46 @@ def _micro_sanitize(text: str) -> str:
             .replace("\u2026", "...")      # ellipsis …
             )
 
-# ===== SCOREBOARD LOGOS IMPORT =====
-try:
-    from scoreboard_logos import render_logo_to_surface, get_nfl_logo_code
-    LOGOS_AVAILABLE = True
-    print("[START] Scoreboard logos loaded successfully", flush=True)
-except ImportError:
-    LOGOS_AVAILABLE = False
-    def render_logo_to_surface(code, w, h):
-        import pygame
-        s = pygame.Surface((w,h))
-        s.fill((0,0,0))
-        return s
-    def get_nfl_logo_code(code):
-        return code
-    print("[WARN] scoreboard_logos.py not found - logos disabled", flush=True)
-# ===== END SCOREBOARD LOGOS IMPORT =====
+
+# ===== SCOREBOARD TEAM ABBREVIATION COLORS =====
+# LED-friendly colors (bright enough to be visible on dark panel)
+_SCOREBOARD_NHL_COLORS = {
+    "ANA": (252,  76,   2), "ARI": (200,  50,  70), "BOS": (252, 181,  20),
+    "BUF": (  0,  83, 155), "CAR": (204,   0,   0), "CBJ": (206,  17,  38),
+    "CGY": (200,  16,  46), "CHI": (207,  10,  44), "COL": ( 35,  97, 146),
+    "DAL": (  0, 104,  71), "DET": (206,  17,  38), "EDM": (252,  76,   2),
+    "FLA": (200,  16,  46), "LAK": (162, 170, 173), "MIN": (165,  25,  46),
+    "MTL": (175,  30,  45), "NJD": (206,  17,  38), "NSH": (255, 184,  28),
+    "NYI": (244, 125,  48), "NYR": (  0,  51, 160), "OTT": (197,  32,  50),
+    "PHI": (247,  73,   2), "PIT": (252, 181,  20), "SEA": (153, 217, 217),
+    "SJS": (  0, 109, 117), "STL": (252, 181,  20), "TBL": (  0,  83, 155),
+    "TOR": (  0,  83, 155), "UTA": (  0, 164, 153), "VAN": (  0, 114,  80),
+    "VGK": (181, 152,  90), "WPG": (142, 144, 144), "WSH": (200,  16,  46),
+}
+_SCOREBOARD_NFL_COLORS = {
+    "ARI": (151,  35,  63), "ATL": (167,  25,  48), "BAL": (120,  80, 200),
+    "BUF": (198,  12,  48), "CAR": (  0, 133, 202), "CHI": (200,  56,   3),
+    "CIN": (251,  79,  20), "CLE": (255,  60,   0), "DAL": (134, 147, 151),
+    "DEN": (251,  79,  20), "DET": (  0, 118, 182), "GB":  (255, 184,  28),
+    "HOU": (167,  25,  48), "IND": (  0,  83, 168), "JAX": (  0, 103, 120),
+    "KC":  (227,  24,  55), "LAC": (  0, 128, 198), "LAR": (255, 163,   0),
+    "LV":  (165, 172, 175), "MIA": (  0, 142, 151), "MIN": ( 79,  38, 131),
+    "NE":  (198,  12,  48), "NO":  (211, 188, 141), "NYG": (163,  13,  45),
+    "NYJ": ( 18, 140,  80), "PHI": (  0, 140, 100), "PIT": (255, 184,  28),
+    "SEA": (105, 190,  40), "SF":  (170,   0,   0), "TB":  (213,  10,  10),
+    "TEN": ( 75, 146, 219), "WAS": (255, 182,  18),
+}
+
+def _render_team_abbr(code: str, league: str, w: int, h: int) -> "pygame.Surface":
+    """Render a 3-letter team abbreviation centered in a w×h surface in team color."""
+    lut = _SCOREBOARD_NFL_COLORS if league == "NFL" else _SCOREBOARD_NHL_COLORS
+    color = lut.get(code.upper(), (255, 255, 255))
+    text_surf = _glyph_surface_5x7(code[:3].upper(), color, h, spacing=1)
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    surf.fill((0, 0, 0, 0))
+    surf.blit(text_surf, ((w - text_surf.get_width()) // 2, 0))
+    return surf
+# ===== END SCOREBOARD TEAM ABBREVIATION COLORS =====
 
 # ------------------------------ utils & formatters ------------------------------------------------
 def parse_color(name: str):
@@ -270,15 +288,6 @@ def time_in_range(now_t: dtime, start_t: dtime, end_t: dtime) -> bool:
     return (start_t <= end_t and start_t <= now_t < end_t) or (start_t > end_t and (now_t >= start_t or now_t < end_t))
 
 
-def is_off_window_local(now_dt: datetime) -> bool:
-    if SCHEDULE_TEST_FORCE_OFF: return True
-    if not SCHEDULE_ENABLED: return False
-    sh, sm = parse_hhmm(SCHEDULE_OFF_START); eh, em = parse_hhmm(SCHEDULE_OFF_END)
-    return time_in_range(now_dt.time(), dtime(sh, sm), dtime(eh, em))
-
-
-DIM_WINDOWS=[]
-
 def apply_night_mode_speed(pps: float, now_dt: datetime)->float:
     if not NIGHT_MODE_ENABLED: return pps
     sh, sm = parse_hhmm(NIGHT_MODE_START); eh, em = parse_hhmm(NIGHT_MODE_END)
@@ -287,14 +296,13 @@ def apply_night_mode_speed(pps: float, now_dt: datetime)->float:
     return pps
 
 def current_dim_scale(now_dt: datetime)->float:
-    """Dimming priority: DIM_TEST > NIGHT_MODE > DIM_WINDOWS > full brightness."""
-    if DIM_TEST_ENABLED: return max(0.01, min(1.0, DIM_TEST_PCT/100.0))
+    """Return brightness scale: quick override takes priority, else night mode, else full."""
+    if QUICK_DIM_PCT > 0:
+        return max(0.01, min(1.0, QUICK_DIM_PCT / 100.0))
     if NIGHT_MODE_ENABLED:
         sh, sm = parse_hhmm(NIGHT_MODE_START); eh, em = parse_hhmm(NIGHT_MODE_END)
         if time_in_range(now_dt.time(), dtime(sh,sm), dtime(eh,em)):
             return max(0.01, min(1.0, NIGHT_MODE_DIM_PCT/100.0))
-    for st, et, scale_val in DIM_WINDOWS:
-        if time_in_range(now_dt.time(), st, et): return scale_val
     return 1.0
 
 # -------------------- RGB MATRIX FUNCTIONS --------------------
@@ -639,6 +647,8 @@ def build_preroll_bigtime_surface(now_dt, font):
     """
     Big centered time display for preroll (static, not scrolling).
     Uses PREROLL_COLOR for the time display.
+    Antialiasing is intentionally False: LED panels have discrete pixels and antialiasing
+    produces blended grey pixels that look muddy on the matrix.
     """
     if CLOCK_24H:
         time_str = now_dt.strftime("%H:%M:%S") if CLOCK_SHOW_SECONDS else now_dt.strftime("%H:%M")
@@ -646,8 +656,10 @@ def build_preroll_bigtime_surface(now_dt, font):
         time_str = now_dt.strftime("%-I:%M:%S") if CLOCK_SHOW_SECONDS else now_dt.strftime("%-I:%M")
     if CLOCK_BLINK_COLON and (now_dt.second % 2 == 0):
         time_str = time_str.replace(":", " ")
-    
-    time_srf = font.render(time_str, True, parse_color(PREROLL_COLOR))
+    # Use a fresh font if the passed-in font is None (safety guard)
+    f = font if font is not None else get_preroll_big_font()
+    # antialias=False: cleaner on LED displays, and avoids rendering issues in headless mode
+    time_srf = f.render(time_str, False, parse_color(PREROLL_COLOR))
     return time_srf
 
 
@@ -725,22 +737,9 @@ def render_fullheight_scoreboard(frame, game_data, font_big, flash_home=False, f
 
     # For 192x16 displays (full layout)
     if W_local >= 192:
-        # Render team logos
-        if LOGOS_AVAILABLE:
-            try:
-                if league == "NFL":
-                    home_logo_code = get_nfl_logo_code(home_code)
-                    away_logo_code = get_nfl_logo_code(away_code)
-                else:
-                    home_logo_code = home_code
-                    away_logo_code = away_code
-                home_logo = render_logo_to_surface(home_logo_code, 32, 16)
-                away_logo = render_logo_to_surface(away_logo_code, 32, 16)
-                frame.blit(home_logo, (0, 0))
-                frame.blit(away_logo, (160, 0))
-            except Exception:
-                pass  # Logo rendering is best-effort
-        # Logos not available - team codes will show via score text
+        # Render team abbreviations in team primary color
+        frame.blit(_render_team_abbr(home_code, league, 32, H_local), (0, 0))
+        frame.blit(_render_team_abbr(away_code, league, 32, H_local), (160, 0))
         # Render scores
         score_color_home = flash_color if flash_home else (255, 255, 255)
         score_color_away = flash_color if flash_away else (255, 255, 255)
