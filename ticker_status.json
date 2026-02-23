@@ -8,26 +8,26 @@
       "leagues_with_games": [],
       "test_mode": false,
       "error_message": null,
-      "last_update": "2026-02-21 15:13:34",
-      "timestamp": 1771704814.8309083
+      "last_update": "2026-02-22 22:31:08",
+      "timestamp": 1771817468.5577765
     },
     "market": {
       "status": "ok",
       "market_state": "CLOSED",
       "symbols_count": 13,
       "symbols_failed": 0,
-      "fetch_duration_sec": 0.83,
+      "fetch_duration_sec": 0.76,
       "error_message": null,
-      "last_update": "2026-02-21 15:10:53",
-      "timestamp": 1771704653.354721
+      "last_update": "2026-02-22 22:31:05",
+      "timestamp": 1771817465.4035301
     },
     "weather": {
       "status": "ok",
       "severity": "none",
-      "fetch_duration_sec": 0.2,
+      "fetch_duration_sec": 0.19,
       "error_message": null,
-      "last_update": "2026-02-21 15:10:48",
-      "timestamp": 1771704648.7237124
+      "last_update": "2026-02-22 22:28:43",
+      "timestamp": 1771817323.3443015
     },
     "hamqsl": {
       "status": "ok",

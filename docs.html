@@ -289,19 +289,21 @@ XEQT.TO=1.2431</pre>
 "MESSAGE_TEST_FORCE": false</pre>
 
     <h3 id="dimming">Dimming &amp; Scheduling</h3>
-    <p>Multiple dimming systems can run simultaneously. Night Mode is the simplest and most common setup.</p>
+    <p>Two dimming systems plus an auto-off schedule. Priority: <strong>DIM_TEST</strong> &gt; <strong>Night Mode</strong> &gt; <strong>Dim Schedule</strong> &gt; full brightness. The <code>BRIGHT</code> override skips all dimming.</p>
     <h4>Night Mode (Recommended)</h4>
+    <p>Automatically dims the display <em>and</em> slows scroll speed during a time window.</p>
     <pre>"NIGHT_MODE_ENABLED": true,
 "NIGHT_MODE_START": "22:00",
 "NIGHT_MODE_END": "07:00",
 "NIGHT_MODE_DIM_PCT": 30,     // brightness %
 "NIGHT_MODE_SPEED_PCT": 75    // scroll speed %</pre>
-    <h4>Manual Dimming</h4>
-    <pre>"DIM_ENABLED": true,
-"DIM_LEVEL": "off"   // off=100%, low=30%, medium=60%</pre>
-    <h4>Scheduled Dimming (up to 3 windows)</h4>
-    <pre>"DIM_SCHEDULE_ENABLED": true,
-"DIM1_START": "22:00", "DIM1_END": "06:00", "DIM1_PCT": 30</pre>
+    <h4>Dim Schedule (DIM_WINDOWS)</h4>
+    <p>Time-based brightness windows. Active whenever the array is populated. Each entry: <code>{"start":"HH:MM", "end":"HH:MM", "pct":N}</code>.</p>
+    <pre>"DIM_WINDOWS": [
+  {"start": "22:00", "end": "06:00", "pct": 30},
+  {"start": "06:00", "end": "08:00", "pct": 60}
+]</pre>
+    <p>Quick buttons in the web UI: <strong>Dim 30%</strong> / <strong>Dim 60%</strong> set an all-day window; <strong>Dim Off</strong> clears the schedule.</p>
     <h4>Auto Off/On Schedule</h4>
     <pre>"SCHEDULE_ENABLED": false,
 "SCHEDULE_OFF_START": "23:00",
@@ -399,15 +401,14 @@ XEQT.TO=1.2431</pre>
     <h3 id="cfg-dim">Dimming</h3>
     <table class="cfg-table">
       <tr><th>Key</th><th>Default</th><th>Description</th></tr>
-      <tr><td class="cfg-key">NIGHT_MODE_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Enable automatic night dimming by time window</td></tr>
+      <tr><td class="cfg-key">NIGHT_MODE_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Enable automatic night dimming + scroll slowdown</td></tr>
       <tr><td class="cfg-key">NIGHT_MODE_START</td><td class="cfg-default">22:00</td><td class="cfg-desc">Night mode start time (HH:MM)</td></tr>
       <tr><td class="cfg-key">NIGHT_MODE_END</td><td class="cfg-default">07:00</td><td class="cfg-desc">Night mode end time (HH:MM)</td></tr>
       <tr><td class="cfg-key">NIGHT_MODE_DIM_PCT</td><td class="cfg-default">30</td><td class="cfg-desc">Brightness % during night (1–100)</td></tr>
       <tr><td class="cfg-key">NIGHT_MODE_SPEED_PCT</td><td class="cfg-default">75</td><td class="cfg-desc">Scroll speed % during night (1–100)</td></tr>
-      <tr><td class="cfg-key">DIM_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Manual dimming override</td></tr>
-      <tr><td class="cfg-key">DIM_LEVEL</td><td class="cfg-default">off</td><td class="cfg-desc">off (100%), low (30%), medium (60%)</td></tr>
-      <tr><td class="cfg-key">DIM_SCHEDULE_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Enable scheduled dim windows</td></tr>
-      <tr><td class="cfg-key">DIM1_START / DIM1_END / DIM1_PCT</td><td class="cfg-default">-</td><td class="cfg-desc">First scheduled dim window (also DIM2, DIM3)</td></tr>
+      <tr><td class="cfg-key">DIM_WINDOWS</td><td class="cfg-default">[]</td><td class="cfg-desc">Array of {start, end, pct} time windows for scheduled dimming. Active when populated</td></tr>
+      <tr><td class="cfg-key">DIM_TEST_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Force a specific brightness level for testing</td></tr>
+      <tr><td class="cfg-key">DIM_TEST_PCT</td><td class="cfg-default">100</td><td class="cfg-desc">Forced brightness % when DIM_TEST_ENABLED is true</td></tr>
       <tr><td class="cfg-key">SCHEDULE_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Blank display completely during off hours</td></tr>
       <tr><td class="cfg-key">SCHEDULE_OFF_START</td><td class="cfg-default">23:00</td><td class="cfg-desc">Auto-off start time</td></tr>
       <tr><td class="cfg-key">SCHEDULE_OFF_END</td><td class="cfg-default">07:00</td><td class="cfg-desc">Auto-off end time (display resumes)</td></tr>
@@ -579,9 +580,9 @@ Apple</pre>
         <tr><td><code>POST /action/scoreboard-mode</code></td><td>Force scoreboard view until cleared</td></tr>
         <tr><td><code>POST /action/maint-mode</code></td><td>Show maintenance message until cleared</td></tr>
         <tr><td><code>POST /action/show-message</code></td><td>Show custom message for 5 min (form field: <code>message</code>)</td></tr>
-        <tr><td><code>POST /action/dim-low</code></td><td>Set dimming to 30%</td></tr>
-        <tr><td><code>POST /action/dim-medium</code></td><td>Set dimming to 60%</td></tr>
-        <tr><td><code>POST /action/dim-high</code></td><td>Set dimming to 100% (full brightness)</td></tr>
+        <tr><td><code>POST /action/dim-low</code></td><td>Set all-day dim window at 30%</td></tr>
+        <tr><td><code>POST /action/dim-medium</code></td><td>Set all-day dim window at 60%</td></tr>
+        <tr><td><code>POST /action/dim-high</code></td><td>Clear dim schedule (100% brightness)</td></tr>
         <tr><td><code>POST /action/stop-service</code></td><td>Stop the systemd ticker service</td></tr>
         <tr><td><code>POST /restart</code></td><td>Restart the ticker service</td></tr>
       </tbody>

@@ -57,19 +57,6 @@ PREROLL_FONT_BOLD = True
 MAINT_FONT_BOLD = True
 
 # DIM variables
-DIM_ENABLED = False
-DIM_LEVEL = "off"
-DIM_CUSTOM_PCT = 0
-DIM_SCHEDULE_ENABLED = False
-DIM1_START = ""
-DIM1_END = ""
-DIM1_PCT = 30
-DIM2_START = ""
-DIM2_END = ""
-DIM2_PCT = 60
-DIM3_START = ""
-DIM3_END = ""
-DIM3_PCT = 100
 DIM_TEST_ENABLED = False
 DIM_TEST_PCT = 100
 NIGHT_MODE_ENABLED = False
@@ -124,9 +111,6 @@ def set_globals(**kwargs):
     for key, value in kwargs.items():
         if key in g:
             g[key] = value
-    # Initialize DIM_WINDOWS after globals are set
-    if 'DIM1_START' in kwargs or 'DIM2_START' in kwargs or 'DIM3_START' in kwargs:
-        _init_dim_windows()
 
 
 def using_microfont() -> bool:
@@ -293,21 +277,7 @@ def is_off_window_local(now_dt: datetime) -> bool:
     return time_in_range(now_dt.time(), dtime(sh, sm), dtime(eh, em))
 
 
-def compute_baseline_dim_scale()->float:
-    if not DIM_ENABLED: return 1.0
-    if DIM_CUSTOM_PCT > 0: return max(0.01, min(1.0, DIM_CUSTOM_PCT/100.0))
-    return {"low":0.30, "medium":0.60, "off":1.0}.get(DIM_LEVEL, 1.0)
-
 DIM_WINDOWS=[]
-
-def _init_dim_windows():
-    global DIM_WINDOWS
-    DIM_WINDOWS=[]
-    for start_var, end_var, pct_var in [("DIM1_START","DIM1_END","DIM1_PCT"),("DIM2_START","DIM2_END","DIM2_PCT"),("DIM3_START","DIM3_END","DIM3_PCT")]:
-        sv = globals().get(start_var, ""); ev = globals().get(end_var, ""); pv = globals().get(pct_var, 100)
-        if not sv or not ev: continue
-        sh, sm = parse_hhmm(sv); eh, em = parse_hhmm(ev)
-        DIM_WINDOWS.append((dtime(sh,sm), dtime(eh,em), max(0.01, min(1.0, float(pv)/100.0))))
 
 def apply_night_mode_speed(pps: float, now_dt: datetime)->float:
     if not NIGHT_MODE_ENABLED: return pps
@@ -317,16 +287,15 @@ def apply_night_mode_speed(pps: float, now_dt: datetime)->float:
     return pps
 
 def current_dim_scale(now_dt: datetime)->float:
-    base = compute_baseline_dim_scale()
-    if DIM_SCHEDULE_ENABLED:
-        for st, et, scale_val in DIM_WINDOWS:
-            if time_in_range(now_dt.time(), st, et): return scale_val
+    """Dimming priority: DIM_TEST > NIGHT_MODE > DIM_WINDOWS > full brightness."""
+    if DIM_TEST_ENABLED: return max(0.01, min(1.0, DIM_TEST_PCT/100.0))
     if NIGHT_MODE_ENABLED:
         sh, sm = parse_hhmm(NIGHT_MODE_START); eh, em = parse_hhmm(NIGHT_MODE_END)
         if time_in_range(now_dt.time(), dtime(sh,sm), dtime(eh,em)):
-            scale = max(0.01, min(1.0, NIGHT_MODE_DIM_PCT/100.0)); return scale
-    if DIM_TEST_ENABLED: return max(0.01, min(1.0, DIM_TEST_PCT/100.0))
-    return base
+            return max(0.01, min(1.0, NIGHT_MODE_DIM_PCT/100.0))
+    for st, et, scale_val in DIM_WINDOWS:
+        if time_in_range(now_dt.time(), st, et): return scale_val
+    return 1.0
 
 # -------------------- RGB MATRIX FUNCTIONS --------------------
 
@@ -355,21 +324,23 @@ def init_rgb_matrix(width=192, height=16, brightness=100, hardware_mapping='adaf
         panel_type: Panel type hint (default '')
     """
     global RGB_MATRIX, RGB_CANVAS
-    
-    print(f"[RGB Matrix] Initializing {width}x{height}, brightness={brightness}, hw={hardware_mapping}", flush=True)
+
+    # cols = per-panel width (total width / chain_length)
+    cols_per_panel = width // max(1, chain_length) if chain_length > 1 else width
+    print(f"[RGB Matrix] Initializing {width}x{height} ({cols_per_panel}cols x {chain_length}chain), brightness={brightness}, hw={hardware_mapping}", flush=True)
 
     try:
         from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
         options = RGBMatrixOptions()
         options.rows = height
-        options.cols = width
+        options.cols = cols_per_panel
         options.brightness = brightness
         options.hardware_mapping = hardware_mapping
         options.gpio_slowdown = gpio_slowdown
         options.pwm_bits = pwm_bits
         options.pwm_lsb_nanoseconds = pwm_lsb_nanoseconds
-        options.disable_hardware_pulsing = False
+        options.disable_hardware_pulsing = True   # Required on most Pi setups; avoids /dev/mem access errors
         options.show_refresh_rate = False
         options.drop_privileges = False
 
@@ -386,13 +357,14 @@ def init_rgb_matrix(width=192, height=16, brightness=100, hardware_mapping='adaf
         if panel_type:
             options.panel_type = panel_type
 
+        print(f"[RGB Matrix] Options: rows={options.rows} cols={options.cols} chain={options.chain_length} parallel={options.parallel} hw={options.hardware_mapping}", flush=True)
         RGB_MATRIX = RGBMatrix(options=options)
         RGB_CANVAS = RGB_MATRIX.CreateFrameCanvas()
 
         chain_info = f", chain={chain_length}x{parallel}" if (chain_length > 1 or parallel > 1) else ""
         print(f"[RGB Matrix] Ready: {width}x{height} brightness={brightness}% hw={hardware_mapping}{chain_info}", flush=True)
         return True
-        
+
     except ImportError as e:
         print(f"[RGB Matrix] ERROR: rpi-rgb-led-matrix library not found: {e}", flush=True)
         print("[RGB Matrix] Install with: sudo pip3 install rpi-rgb-led-matrix", flush=True)
@@ -410,7 +382,10 @@ _rgb_init_warn_ts = 0.0
 
 def write_surface_to_rgb_matrix(surf):
     """
-    Write pygame surface to RGB Matrix.
+    Write pygame surface to RGB Matrix using PIL SetImage() for correct pixel ordering.
+    pygame.surfarray.array3d() returns shape (width, height, 3) in column-major order,
+    which causes garbled output when passed directly. Converting via PIL Image ensures
+    correct row-major (y, x) ordering that SetImage() expects.
     Returns True on success, False on failure.
     """
     global RGB_CANVAS, RGB_MATRIX, _rgb_dim_warn_ts, _rgb_err_ts, _rgb_init_warn_ts
@@ -431,14 +406,13 @@ def write_surface_to_rgb_matrix(surf):
                 _rgb_dim_warn_ts = now
             return False
 
-        # Convert pygame surface to RGB pixel array
-        pixels = pygame.surfarray.array3d(surf)
-
-        # Write pixels to RGB Matrix canvas
-        for y in range(h):
-            for x in range(w):
-                r, g, b = pixels[x, y]
-                RGB_CANVAS.SetPixel(x, y, int(r), int(g), int(b))
+        # Convert pygame surface → PIL Image → RGB Matrix canvas
+        # pygame.image.tostring() produces a flat row-major RGB byte string
+        # that PIL Image.frombytes() and SetImage() both expect correctly.
+        from PIL import Image
+        raw = pygame.image.tostring(surf, "RGB")
+        pil_img = Image.frombytes("RGB", (w, h), raw)
+        RGB_CANVAS.SetImage(pil_img)
 
         # Swap the canvas to display
         RGB_CANVAS = RGB_MATRIX.SwapOnVSync(RGB_CANVAS)
@@ -577,9 +551,6 @@ def row_render_text(txt: str, color, row_h=None, custom_font=None) -> pygame.Sur
 
 def build_time_surface(dot_color=None, row_font=None):
     """Render time + dot indicator with trailing space, clipped to ROW_H."""
-    # Always use row font for ticker display (not the big preroll font)
-    font = row_font if row_font else get_row_font()
-    
     now_dt = now_local()
     if CLOCK_24H:
         time_str = now_dt.strftime("%H:%M")
@@ -587,30 +558,37 @@ def build_time_surface(dot_color=None, row_font=None):
         time_str = now_dt.strftime("%-I:%M")  # 12-hour, no leading zero
     if CLOCK_BLINK_COLON and (now_dt.second % 2 == 0):
         time_str = time_str.replace(":", " ")
-    
+
     # Render time with trailing spaces for separation
     time_str_with_space = time_str + "  "  # Add 2 spaces after time
-    time_srf = font.render(time_str_with_space, True, parse_color(CLOCK_COLOR))
-    
+    clk_color = parse_color(CLOCK_COLOR)
+
+    # Use microfont path when enabled (same as all other ticker text in dual mode)
+    if using_microfont():
+        time_srf = _glyph_surface_5x7(_micro_sanitize(time_str_with_space), clk_color, ROW_H, spacing=1)
+    else:
+        font = row_font if row_font else get_row_font()
+        time_srf = font.render(time_str_with_space, True, clk_color)
+
     # Add status dot BEFORE the time
     time_w = time_srf.get_width()
     time_h = time_srf.get_height()
     dot_w = 2
     spacing = 3
     combined_w = dot_w + spacing + time_w
-    
+
     # CRITICAL: Clip height to exactly ROW_H (8px) to prevent bottom row overlap
     final_h = min(time_h, ROW_H)
     combined = pygame.Surface((combined_w, final_h), pygame.SRCALPHA)
     combined.fill((0,0,0,0))
-    
+
     # Draw dot with provided color or default to GREEN
     # Position dot vertically centered in the clipped height
     dot_col = dot_color if dot_color else GREEN
     dot_x = 0
     dot_y = final_h // 2  # Center the dot vertically in clipped area
     pygame.draw.circle(combined, dot_col, (dot_x + 1, dot_y), 1)
-    
+
     # Blit time AFTER the dot - use subsurface if time is taller than ROW_H
     if time_h > ROW_H:
         # Crop from BOTTOM to keep baseline aligned (remove descenders, not ascenders)
@@ -621,7 +599,7 @@ def build_time_surface(dot_color=None, row_font=None):
         # Vertically center the time if it's shorter than ROW_H
         time_y = (final_h - time_h) // 2
         combined.blit(time_srf, (dot_w + spacing, time_y))
-    
+
     return combined
 
 
