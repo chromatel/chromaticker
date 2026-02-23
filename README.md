@@ -9,6 +9,7 @@ There is **no authentication or security** in this project. The Web UI is wide o
 Run this on an isolated VLAN or private network. Keep it simple, keep it safe.
 
 ---
+<img width="869" height="619" alt="image" src="https://github.com/user-attachments/assets/5c304925-1794-4406-b069-59720d6b9077" />
 
 ## 🧰 Materials List
 
