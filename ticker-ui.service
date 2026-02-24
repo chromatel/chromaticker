@@ -1,0 +1,16 @@
+[Unit]
+Description=LED Ticker Flask Control Panel
+After=network.target
+
+[Service]
+#Environment=FPP_SHM_PATH=/dev/shm/FPP-Model-Data-Matrix96x16
+User=fpp
+WorkingDirectory=/home/fpp/led-ticker
+# Use the python path inside your venv to ensure Flask is found
+ExecStart=/home/fpp/led-ticker/venv/bin/python3 flask_ui.py
+Restart=always
+Environment=FLASK_PORT=5080
+Environment=TICKER_CONFIG=/home/fpp/led-ticker/config.json
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,39 @@
+[Unit]
+Description=LED Stock Ticker Service
+After=network-online.target fppd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/home/fpp/led-ticker
+
+# Main process
+ExecStart=/home/fpp/led-ticker/venv/bin/python /home/fpp/led-ticker/ticker.py
+
+# Restart behavior
+Restart=on-failure
+RestartSec=5s
+
+# Timeout settings - give it time to shutdown cleanly
+TimeoutStopSec=5s
+# Send SIGTERM first, wait, then SIGKILL if needed
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Resource limits
+LimitNOFILE=4096
+LimitNPROC=512
+
+# Environment
+Environment="XDG_RUNTIME_DIR=/tmp"
+Environment="PYGAME_HIDE_SUPPORT_PROMPT=1"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=led-ticker
+
+[Install]
+WantedBy=multi-user.target
