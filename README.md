@@ -101,6 +101,7 @@ config.json           Hot‑reload configuration
 Each worker runs independently and communicates via multiprocessing queues.  
 The renderer pushes frames to the LED panel at up to **60 FPS**.
 
+I have included service files to run it as a service on a pi. Please don't run it as root like I did, I did it the lazy way and my system is air gapped so not a big security risk.
 ---
 
 ## 🌐 Web Control Panel
