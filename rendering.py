@@ -11,7 +11,6 @@ import pygame
 import os
 import time
 from datetime import datetime, time as dtime
-from multiprocessing import Queue
 import queue as queue_std
 
 # Import normalize_ws from utils (avoid duplication)
@@ -267,7 +266,7 @@ def fmt_price_compact(v: float) -> str:
     except Exception: return "--"
     if x >= 1_000_000: return f"{x/1_000_000:.1f}M"
     if x >= 1_000: return f"{x/1_000:.1f}k"
-    return f"{x:.1f}"
+    return f"{x:.2f}"
 
 
 def fmt_value_currency_compact(amount: float) -> str:
@@ -276,7 +275,7 @@ def fmt_value_currency_compact(amount: float) -> str:
     except Exception: return "$--"
     if x >= 1_000_000: return f"${x/1_000_000:.1f}M"
     if x >= 1_000: return f"${x/1_000:.1f}k"
-    return f"${x:.0f}"
+    return f"${x:.1f}"
 
 
 def parse_hhmm(s: str):
@@ -645,8 +644,10 @@ def build_clock_surface(w_full: int, h_full: int):
 
 def build_preroll_bigtime_surface(now_dt, font):
     """
-    Big centered time display for preroll (static, not scrolling).
+    Centered time display for preroll (static, not scrolling).
     Uses PREROLL_COLOR for the time display.
+    When microfont is enabled, renders using the 5x7 pixel font so the time
+    fits the display and can be properly centered; otherwise uses the big font.
     Antialiasing is intentionally False: LED panels have discrete pixels and antialiasing
     produces blended grey pixels that look muddy on the matrix.
     """
@@ -656,11 +657,13 @@ def build_preroll_bigtime_surface(now_dt, font):
         time_str = now_dt.strftime("%-I:%M:%S") if CLOCK_SHOW_SECONDS else now_dt.strftime("%-I:%M")
     if CLOCK_BLINK_COLON and (now_dt.second % 2 == 0):
         time_str = time_str.replace(":", " ")
+    color = parse_color(PREROLL_COLOR)
+    if using_microfont():
+        return _glyph_surface_5x7(_micro_sanitize(time_str), color, ROW_H, spacing=1)
     # Use a fresh font if the passed-in font is None (safety guard)
     f = font if font is not None else get_preroll_big_font()
     # antialias=False: cleaner on LED displays, and avoids rendering issues in headless mode
-    time_srf = f.render(time_str, False, parse_color(PREROLL_COLOR))
-    return time_srf
+    return f.render(time_str, False, color)
 
 
 def build_announcement_surface(text, color, row_font):

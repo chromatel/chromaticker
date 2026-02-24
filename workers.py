@@ -251,13 +251,6 @@ def _nhl_fetch_now_via_apiweb():
     return out
 
 
-try:
-    from nhlpy import NHLClient  # optional dependency; OK if missing
-    NHLPY_AVAILABLE = True
-except Exception:
-    NHLPY_AVAILABLE = False
-
-
 def _nhl_schedule_today_via_wrapper(client: "NHLClient"):
     """Use nhlpy wrapper (if available) to supplement pregame windows."""
     try:
@@ -296,6 +289,52 @@ def _within_window(start_ts_iso: str, minutes_before: int):
         return is_within, minutes_until
     except Exception:
         return False, None
+
+
+def _filter_postgame_games(games, final_states, game_hours, postgame_delay_min):
+    """Return games excluding FINAL/OFF games that are past the postgame window."""
+    result = []
+    for g in games:
+        state = g.get("state", "").upper()
+        if state in final_states:
+            start_ts = g.get("start_ts") or ""
+            if start_ts:
+                try:
+                    dt_utc = datetime.fromisoformat(start_ts.replace("Z", "+00:00"))
+                    if dt_utc.tzinfo is None:
+                        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+                    game_local = dt_utc.astimezone(TZINFO) if TZINFO else dt_utc.astimezone()
+                    approx_end = game_local + timedelta(hours=game_hours)
+                    mins_since_end = (now_local() - approx_end).total_seconds() / 60
+                    if mins_since_end <= postgame_delay_min:
+                        result.append(g)
+                except Exception:
+                    pass
+        else:
+            result.append(g)
+    return result
+
+
+def _apply_pregame_window(games_raw, window_min):
+    """Filter pregame games to those within window, annotating with minutes_until_start."""
+    result = []
+    for g in games_raw:
+        is_within, mins_until = _within_window(g.get("start_ts") or "", window_min)
+        if is_within:
+            g["minutes_until_start"] = mins_until
+            result.append(g)
+    return result
+
+
+def _order_and_trim_games(live_mine, live_others, pre_mine, pre_others, include_others, only_mine, max_games):
+    """Order games by priority: live my teams, live others, pregame my teams, pregame others."""
+    ordered = list(live_mine)
+    if include_others and not only_mine:
+        ordered += live_others
+    ordered += pre_mine
+    if include_others and not only_mine:
+        ordered += pre_others
+    return ordered[:max_games]
 
 
 def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, live_cadence,
@@ -370,54 +409,19 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
                         error_msg = f"NFL fetch failed: {str(e)[:50]}"
                         fetch_status = "error"
 
-                    # Filter FINAL games: only keep if within postgame window
-                    nfl_filtered = []
-                    for g in nfl_all:
-                        if g["state"] == "FINAL":
-                            start_ts = g.get("start_ts") or ""
-                            if start_ts:
-                                try:
-                                    dt_utc = datetime.fromisoformat(start_ts.replace("Z","+00:00"))
-                                    if dt_utc.tzinfo is None:
-                                        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
-                                    game_local = dt_utc.astimezone(TZINFO) if TZINFO else dt_utc.astimezone()
-                                    # Assume 3 hour game duration
-                                    approx_end = game_local + timedelta(hours=3)
-                                    mins_since_end = (now_local() - approx_end).total_seconds() / 60
-                                    if mins_since_end <= SCOREBOARD_POSTGAME_DELAY_MIN:
-                                        nfl_filtered.append(g)
-                                except Exception:
-                                    pass
-                        else:
-                            nfl_filtered.append(g)
-                    nfl_all = nfl_filtered
+                    nfl_all = _filter_postgame_games(nfl_all, {"FINAL"}, 3, SCOREBOARD_POSTGAME_DELAY_MIN)
 
                     wanted = set([t for t in nfl_teams if t])
                     live_mine = [g for g in nfl_all if g["state"] == "LIVE" and _team_in_list(g, wanted)]
                     live_others = [g for g in nfl_all if g["state"] == "LIVE" and not _team_in_list(g, wanted)]
-                    pre_mine_raw = [g for g in nfl_all if g["state"] == "PREGAME" and _team_in_list(g, wanted)]
-                    pre_mine = []
-                    for g in pre_mine_raw:
-                        is_within, mins_until = _within_window(g.get("start_ts") or "", SCOREBOARD_PREGAME_WINDOW_MIN)
-                        if is_within:
-                            g["minutes_until_start"] = mins_until
-                            pre_mine.append(g)
-                    pre_others_raw = [g for g in nfl_all if g["state"] == "PREGAME" and not _team_in_list(g, wanted)]
-                    pre_others = []
-                    for g in pre_others_raw:
-                        is_within, mins_until = _within_window(g.get("start_ts") or "", SCOREBOARD_PREGAME_WINDOW_MIN)
-                        if is_within:
-                            g["minutes_until_start"] = mins_until
-                            pre_others.append(g)
+                    pre_mine = _apply_pregame_window(
+                        [g for g in nfl_all if g["state"] == "PREGAME" and _team_in_list(g, wanted)],
+                        SCOREBOARD_PREGAME_WINDOW_MIN)
+                    pre_others = _apply_pregame_window(
+                        [g for g in nfl_all if g["state"] == "PREGAME" and not _team_in_list(g, wanted)],
+                        SCOREBOARD_PREGAME_WINDOW_MIN)
 
-                    ordered = []
-                    ordered += live_mine
-                    if include_others and not only_mine:
-                        ordered += live_others
-                    ordered += pre_mine
-                    if include_others and not only_mine:
-                        ordered += pre_others
-                    trimmed = ordered[:max_games]
+                    trimmed = _order_and_trim_games(live_mine, live_others, pre_mine, pre_others, include_others, only_mine, max_games)
                     if trimmed:
                         payloads.append({"league":"NFL","games":trimmed,"ts":now})
 
@@ -433,28 +437,7 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
                             error_msg += f" & NHL failed: {str(e)[:30]}"
                         fetch_status = "error"
 
-                    # Filter FINAL games: only keep if within postgame window
-                    nhl_filtered = []
-                    for g in nhl_now:
-                        state = g.get("state", "").upper()
-                        if state in ("FINAL", "OFF"):
-                            start_ts = g.get("start_ts") or ""
-                            if start_ts:
-                                try:
-                                    dt_utc = datetime.fromisoformat(start_ts.replace("Z","+00:00"))
-                                    if dt_utc.tzinfo is None:
-                                        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
-                                    game_local = dt_utc.astimezone(TZINFO) if TZINFO else dt_utc.astimezone()
-                                    # Assume 2.5 hour game duration for NHL
-                                    approx_end = game_local + timedelta(hours=2, minutes=30)
-                                    mins_since_end = (now_local() - approx_end).total_seconds() / 60
-                                    if mins_since_end <= SCOREBOARD_POSTGAME_DELAY_MIN:
-                                        nhl_filtered.append(g)
-                                except Exception:
-                                    pass
-                        else:
-                            nhl_filtered.append(g)
-                    nhl_now = nhl_filtered
+                    nhl_now = _filter_postgame_games(nhl_now, {"FINAL", "OFF"}, 2.5, SCOREBOARD_POSTGAME_DELAY_MIN)
 
                     wanted = set([t for t in nhl_teams if t])
                     live_mine = [g for g in nhl_now if g["state"] == "LIVE" and _team_in_list(g, wanted)]
@@ -483,30 +466,14 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
                             if is_within:
                                 pre_all.append({**g, "state":"PREGAME"})
 
-                    pre_mine_raw = [g for g in pre_all if _team_in_list(g, wanted)]
-                    pre_mine = []
-                    for g in pre_mine_raw:
-                        is_within, mins_until = _within_window(g.get("start_ts") or "", SCOREBOARD_PREGAME_WINDOW_MIN)
-                        if is_within:
-                            g["minutes_until_start"] = mins_until
-                            pre_mine.append(g)
+                    pre_mine = _apply_pregame_window(
+                        [g for g in pre_all if _team_in_list(g, wanted)],
+                        SCOREBOARD_PREGAME_WINDOW_MIN)
+                    pre_others = _apply_pregame_window(
+                        [g for g in pre_all if not _team_in_list(g, wanted)],
+                        SCOREBOARD_PREGAME_WINDOW_MIN)
 
-                    pre_others_raw = [g for g in pre_all if not _team_in_list(g, wanted)]
-                    pre_others = []
-                    for g in pre_others_raw:
-                        is_within, mins_until = _within_window(g.get("start_ts") or "", SCOREBOARD_PREGAME_WINDOW_MIN)
-                        if is_within:
-                            g["minutes_until_start"] = mins_until
-                            pre_others.append(g)
-
-                    ordered = []
-                    ordered += live_mine
-                    if include_others and not only_mine:
-                        ordered += live_others
-                    ordered += pre_mine
-                    if include_others and not only_mine:
-                        ordered += pre_others
-                    trimmed = ordered[:max_games]
+                    trimmed = _order_and_trim_games(live_mine, live_others, pre_mine, pre_others, include_others, only_mine, max_games)
                     if trimmed:
                         payloads.append({"league":"NHL","games":trimmed,"ts":now})
 

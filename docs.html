@@ -196,7 +196,7 @@ config.json   → all settings (hot-reloaded on change)</pre>
     <div class="card">
       <span class="state-badge state-tk">TK</span> <strong>Ticker</strong> &mdash; Normal operation. Scrolling market data (dual: two independent rows; single: one full-height row).<br><br>
       <span class="state-badge state-pr">PR</span> <strong>Preroll</strong> &mdash; Top-of-hour or market event. Large centered time or scrolling announcement.<br><br>
-      <span class="state-badge state-sb">SB</span> <strong>Scoreboard</strong> &mdash; A tracked team has a live game. Full-screen score display with logos.<br><br>
+      <span class="state-badge state-sb">SB</span> <strong>Scoreboard</strong> &mdash; A tracked team has a live game. Full-screen score display with team abbreviations, scores, and clock.<br><br>
       <span class="state-badge state-ov">OV</span> <strong>Override</strong> &mdash; Manual mode activated from web UI (Clock, Bright, Message, Maint, Scoreboard).
     </div>
     <p><strong>Priority:</strong> Override &gt; Score Alert &gt; Preroll &gt; Scoreboard &gt; Ticker</p>
@@ -241,14 +241,14 @@ XEQT.TO=1.2431</pre>
     <p>Additionally, a periodic market status announcement is injected into the ticker every 5 minutes (e.g., market open/closed status). This appears in the top row in dual mode or in the single row in single mode.</p>
 
     <h3 id="scoreboard">Live Scoreboard</h3>
-    <p>When a tracked team has a live game, the ticker automatically switches to a full-height scoreboard showing team logos, scores, period, and game clock. Goals trigger a red/white/blue flash animation and a score alert scrolls across the display.</p>
+    <p>When a tracked team has a live game, the ticker automatically switches to a full-height scoreboard showing team abbreviations in team colors, scores, period, and game clock. Goals trigger a red/white/blue flash animation and a score alert scrolls across the display.</p>
     <h4>Supported Leagues</h4>
     <ul>
       <li><strong>NHL</strong> &mdash; via api-web.nhle.com</li>
       <li><strong>NFL</strong> &mdash; via ESPN API</li>
     </ul>
     <h4>Scoreboard Display Modes</h4>
-    <p><strong>Full-Height (192x16):</strong> Team logos on each side (32px), large score in center, clock and period. Score flash animation on goal.</p>
+    <p><strong>Full-Height (192x16):</strong> 3-letter team abbreviation in team color on each side (32px), large score in center, clock and period. Score flash animation on goal.</p>
     <p><strong>Compact (in ticker rows):</strong> <code>MTL 3 - TOR 2 (P3 5:42)</code> on top row (dual) or single row, SOG or possession on bottom row (dual only).</p>
     <h4>Key Settings</h4>
     <pre>"SCOREBOARD_ENABLED": true,
@@ -288,26 +288,13 @@ XEQT.TO=1.2431</pre>
 "MESSAGE_COLOR": "magenta",
 "MESSAGE_TEST_FORCE": false</pre>
 
-    <h3 id="dimming">Dimming &amp; Scheduling</h3>
-    <p>Two dimming systems plus an auto-off schedule. Priority: <strong>DIM_TEST</strong> &gt; <strong>Night Mode</strong> &gt; <strong>Dim Schedule</strong> &gt; full brightness. The <code>BRIGHT</code> override skips all dimming.</p>
-    <h4>Night Mode (Recommended)</h4>
-    <p>Automatically dims the display <em>and</em> slows scroll speed during a time window.</p>
+    <h3 id="dimming">Night Mode</h3>
+    <p>Automatically dims the display <em>and</em> slows scroll speed during a time window. The <code>BRIGHT</code> override skips dimming.</p>
     <pre>"NIGHT_MODE_ENABLED": true,
 "NIGHT_MODE_START": "22:00",
 "NIGHT_MODE_END": "07:00",
 "NIGHT_MODE_DIM_PCT": 30,     // brightness %
 "NIGHT_MODE_SPEED_PCT": 75    // scroll speed %</pre>
-    <h4>Dim Schedule (DIM_WINDOWS)</h4>
-    <p>Time-based brightness windows. Active whenever the array is populated. Each entry: <code>{"start":"HH:MM", "end":"HH:MM", "pct":N}</code>.</p>
-    <pre>"DIM_WINDOWS": [
-  {"start": "22:00", "end": "06:00", "pct": 30},
-  {"start": "06:00", "end": "08:00", "pct": 60}
-]</pre>
-    <p>Quick buttons in the web UI: <strong>Dim 30%</strong> / <strong>Dim 60%</strong> set an all-day window; <strong>Dim Off</strong> clears the schedule.</p>
-    <h4>Auto Off/On Schedule</h4>
-    <pre>"SCHEDULE_ENABLED": false,
-"SCHEDULE_OFF_START": "23:00",
-"SCHEDULE_OFF_END": "07:00"</pre>
 
     <h3 id="overrides">Override Modes</h3>
     <p>Activated from the web UI or by setting <code>OVERRIDE_MODE</code> in config. Take precedence over all normal states. All overrides can have a duration in minutes (0 = until manually cleared).</p>
@@ -353,6 +340,7 @@ XEQT.TO=1.2431</pre>
       <tr><th>Key</th><th>Default</th><th>Description</th></tr>
       <tr><td class="cfg-key">TICKERS_TOP</td><td class="cfg-default">[]</td><td class="cfg-desc">Top row tickers: list of [SYMBOL, LABEL] pairs</td></tr>
       <tr><td class="cfg-key">TICKERS_BOT</td><td class="cfg-default">[]</td><td class="cfg-desc">Bottom row tickers: list of [SYMBOL, LABEL] pairs</td></tr>
+      <tr><td class="cfg-key">TICKERS_BOT2</td><td class="cfg-default">[]</td><td class="cfg-desc">Alternate bottom row tickers shown every other scroll. Leave empty to disable alternating. Holdings apply when HOLDINGS_ENABLED is true.</td></tr>
       <tr><td class="cfg-key">HOLDINGS_ENABLED</td><td class="cfg-default">true</td><td class="cfg-desc">Show portfolio value instead of price when enabled</td></tr>
       <tr><td class="cfg-key">HOLDINGS</td><td class="cfg-default">{}</td><td class="cfg-desc">Dict of {SYMBOL: {shares: N}} for portfolio tracking</td></tr>
       <tr><td class="cfg-key">REFRESH_SEC</td><td class="cfg-default">240</td><td class="cfg-desc">Market data refresh interval in seconds</td></tr>
@@ -398,7 +386,7 @@ XEQT.TO=1.2431</pre>
       <tr><td class="cfg-key">SCOREBOARD_TEST_AWAY</td><td class="cfg-default">TOR</td><td class="cfg-desc">Away team code for test game</td></tr>
     </table>
 
-    <h3 id="cfg-dim">Dimming</h3>
+    <h3 id="cfg-dim">Night Mode</h3>
     <table class="cfg-table">
       <tr><th>Key</th><th>Default</th><th>Description</th></tr>
       <tr><td class="cfg-key">NIGHT_MODE_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Enable automatic night dimming + scroll slowdown</td></tr>
@@ -406,12 +394,6 @@ XEQT.TO=1.2431</pre>
       <tr><td class="cfg-key">NIGHT_MODE_END</td><td class="cfg-default">07:00</td><td class="cfg-desc">Night mode end time (HH:MM)</td></tr>
       <tr><td class="cfg-key">NIGHT_MODE_DIM_PCT</td><td class="cfg-default">30</td><td class="cfg-desc">Brightness % during night (1–100)</td></tr>
       <tr><td class="cfg-key">NIGHT_MODE_SPEED_PCT</td><td class="cfg-default">75</td><td class="cfg-desc">Scroll speed % during night (1–100)</td></tr>
-      <tr><td class="cfg-key">DIM_WINDOWS</td><td class="cfg-default">[]</td><td class="cfg-desc">Array of {start, end, pct} time windows for scheduled dimming. Active when populated</td></tr>
-      <tr><td class="cfg-key">DIM_TEST_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Force a specific brightness level for testing</td></tr>
-      <tr><td class="cfg-key">DIM_TEST_PCT</td><td class="cfg-default">100</td><td class="cfg-desc">Forced brightness % when DIM_TEST_ENABLED is true</td></tr>
-      <tr><td class="cfg-key">SCHEDULE_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Blank display completely during off hours</td></tr>
-      <tr><td class="cfg-key">SCHEDULE_OFF_START</td><td class="cfg-default">23:00</td><td class="cfg-desc">Auto-off start time</td></tr>
-      <tr><td class="cfg-key">SCHEDULE_OFF_END</td><td class="cfg-default">07:00</td><td class="cfg-desc">Auto-off end time (display resumes)</td></tr>
     </table>
 
     <h3 id="cfg-clock">Clock Override</h3>
@@ -446,7 +428,7 @@ XEQT.TO=1.2431</pre>
       <li><strong>Market config</strong> (tickers, holdings, refresh) &rarr; Market worker restarts, holdings pushed to renderer immediately</li>
       <li><strong>Weather config</strong> &rarr; Weather worker restarts</li>
       <li><strong>Scoreboard config</strong> &rarr; Scoreboard worker restarts</li>
-      <li><strong>Dim / schedule config</strong> &rarr; Rendering globals updated immediately</li>
+      <li><strong>Night mode config</strong> &rarr; Rendering globals updated immediately</li>
       <li><strong>Override config</strong> &rarr; Override mode applies within one frame</li>
       <li><strong>Message config</strong> &rarr; Message surface rebuilt immediately</li>
       <li><strong>Layout changes</strong> &rarr; Scroll positions reset</li>
@@ -580,9 +562,6 @@ Apple</pre>
         <tr><td><code>POST /action/scoreboard-mode</code></td><td>Force scoreboard view until cleared</td></tr>
         <tr><td><code>POST /action/maint-mode</code></td><td>Show maintenance message until cleared</td></tr>
         <tr><td><code>POST /action/show-message</code></td><td>Show custom message for 5 min (form field: <code>message</code>)</td></tr>
-        <tr><td><code>POST /action/dim-low</code></td><td>Set all-day dim window at 30%</td></tr>
-        <tr><td><code>POST /action/dim-medium</code></td><td>Set all-day dim window at 60%</td></tr>
-        <tr><td><code>POST /action/dim-high</code></td><td>Clear dim schedule (100% brightness)</td></tr>
         <tr><td><code>POST /action/stop-service</code></td><td>Stop the systemd ticker service</td></tr>
         <tr><td><code>POST /restart</code></td><td>Restart the ticker service</td></tr>
       </tbody>
@@ -688,7 +667,6 @@ Apple</pre>
 ├── workers.py             Background data fetchers (market, weather, scoreboard)
 ├── utils.py               Helpers: market hours, weather RSS, color parsing
 ├── flask_ui.py            Web control panel on port 5080
-├── scoreboard_logos.py    Code-generated NHL/NFL team logos
 ├── docs.html              This documentation file
 ├── config.json            All configuration (hot-reloaded)
 ├── ticker_status.json     Live worker status (written by workers)

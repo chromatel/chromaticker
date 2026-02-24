@@ -140,37 +140,6 @@ def _holdings_to_text(hold):
             pass
     return "\n".join(lines)
 
-def _parse_dim_windows(txt):
-    """
-    Parse lines: HH:MM,HH:MM,PCT -> [{"start":"..","end":"..","pct":int},...]
-    """
-    wins = []
-    for line in (txt or "").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        parts = [p.strip() for p in line.split(",")]
-        if len(parts) != 3:
-            continue
-        st, en, pct_s = parts
-        try:
-            pct = int(pct_s)
-            if 1 <= pct <= 100 and st and en:
-                wins.append({"start": st, "end": en, "pct": pct})
-        except Exception:
-            continue
-    return wins
-
-def _dim_windows_to_text(wins):
-    lines = []
-    for w in (wins or []):
-        st = (w.get("start") or "").strip()
-        en = (w.get("end") or "").strip()
-        pc = int(w.get("pct") or 0)
-        if st and en and pc > 0:
-            lines.append(f"{st},{en},{pc}")
-    return "\n".join(lines)
-
 def _get_bool(form, name, default=False):
     v = form.get(name, None)
     if v in ("1", "true", "on", "True", "YES", "yes", "y"):
@@ -388,6 +357,9 @@ HOME_HTML = """
    <div style="display:flex;gap:8px;flex-wrap:wrap;">
     <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/show-clock',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> Clock 5m</button>
     <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/bright-mode',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> Full Bright 30m</button>
+    <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/bright-30',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> 30% Bright</button>
+    <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/bright-60',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> 60% Bright</button>
+    <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/bright-100',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> 100% Bright</button>
     <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/scoreboard-mode',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> Force Scoreboard</button>
     <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/maint-mode',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> Maintenance</button>
     <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/clear-override',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> Clear Override</button>
@@ -395,12 +367,6 @@ HOME_HTML = """
    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
     <input type="text" id="msg-input" placeholder="Custom message..." style="flex:1;padding:6px 10px;font-size:13px;max-width:300px;">
     <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="var msg=document.getElementById('msg-input').value.trim();if(msg){var fd=new FormData();fd.append('message',msg);fetch('/action/show-message',{method:'POST',body:fd}).then(()=>{document.getElementById('msg-input').value='';setTimeout(()=>location.reload(),1000);});}else{alert('Enter a message first');}"> Show Message 5m</button>
-   </div>
-   <div style="font-size:11px;color:#7d8ba8;margin-bottom:4px;margin-top:12px;">DIMMING</div>
-   <div style="display:flex;gap:8px;flex-wrap:wrap;">
-    <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/dim-low',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> Dim 30%</button>
-    <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/dim-medium',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> Dim 60%</button>
-    <button type="button" class="btn secondary" style="padding:6px 12px;font-size:13px;" onclick="fetch('/action/dim-high',{method:'POST'}).then(()=>{setTimeout(()=>location.reload(),1000);})"> Dim Off</button>
    </div>
   </div>
  </div>
@@ -563,8 +529,7 @@ setInterval(updateWorkers,3000);
   <div><label>Bottom PPS</label><input name="PPS_BOT" type="number" step="0.5" value="{{cfg.PPS_BOT or 20.0}}"></div>
   <div><label>Single PPS</label><input name="PPS_SINGLE" type="number" step="0.5" value="{{cfg.PPS_SINGLE or 20.0}}"></div>
  </div>
- <div class="grid4" style="margin-top:8px">
-  <div><label>Model Name</label><input name="MODEL_NAME" value="{{cfg.MODEL_NAME or 'Matrix96x16'}}"></div>
+ <div class="grid3" style="margin-top:8px">
   <div><label>Width (W)</label><input name="W" type="number" value="{{cfg.W or 0}}"></div>
   <div><label>Height (H)</label><input name="H" type="number" value="{{cfg.H or 0}}"></div>
   <div><label>Scale (HDMI)</label><input name="TICKER_SCALE" type="number" value="{{cfg.TICKER_SCALE or 8}}"></div>
@@ -693,8 +658,68 @@ setInterval(updateWorkers,3000);
 </section>
 
 <section>
- <h2>Tickers (Top / Bottom)</h2>
- <p class="muted">Format: <span class="mono">SYMBOL\nLABEL</span> one per line.</p>
+ <h2>Fonts</h2>
+ <p class="muted">Font family names must match files in the <span class="mono">fonts/</span> directory (without extension). Size "auto" picks the largest that fits the row height. Use 0 for auto px on fixed-px fields.</p>
+ <h3 style="margin-top:8px;font-size:15px;color:#94a3b8;">Ticker Rows</h3>
+ <div class="grid3" style="margin-top:8px">
+  <div><label>Font Family</label><input name="FONT_FAMILY_BASE" value="{{cfg.FONT_FAMILY_BASE or 'DejaVuSansMono'}}"></div>
+  <div><label>Font Size (px or "auto")</label><input name="FONT_SIZE_ROW" value="{{cfg.FONT_SIZE_ROW or 'auto'}}"></div>
+  <div><label>Bold</label>
+   <select name="FONT_BOLD_BASE">
+    <option value="1" {% if cfg.FONT_BOLD_BASE %}selected{% endif %}>on</option>
+    <option value="0" {% if not cfg.FONT_BOLD_BASE %}selected{% endif %}>off</option>
+   </select>
+  </div>
+ </div>
+ <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;">Scoreboard</h3>
+ <div class="grid3" style="margin-top:8px">
+  <div><label>Font Family</label><input name="FONT_FAMILY_SCOREBOARD" value="{{cfg.FONT_FAMILY_SCOREBOARD or 'DejaVuSansMono'}}"></div>
+  <div><label>Font Size (px or "auto")</label><input name="FONT_SIZE_SB" value="{{cfg.FONT_SIZE_SB or 'auto'}}"></div>
+  <div><label>Bold</label>
+   <select name="FONT_BOLD_SB">
+    <option value="1" {% if cfg.FONT_BOLD_SB %}selected{% endif %}>on</option>
+    <option value="0" {% if not cfg.FONT_BOLD_SB %}selected{% endif %}>off</option>
+   </select>
+  </div>
+ </div>
+ <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;">Preroll</h3>
+ <div class="grid3" style="margin-top:8px">
+  <div><label>Font Family</label><input name="PREROLL_FONT_FAMILY" value="{{cfg.PREROLL_FONT_FAMILY or 'DejaVuSansMono'}}"></div>
+  <div><label>Font Size (px, 0=auto)</label><input name="PREROLL_FONT_PX" type="number" min="0" max="64" value="{{cfg.PREROLL_FONT_PX or 0}}"></div>
+  <div><label>Bold</label>
+   <select name="PREROLL_FONT_BOLD">
+    <option value="1" {% if cfg.PREROLL_FONT_BOLD %}selected{% endif %}>on</option>
+    <option value="0" {% if not cfg.PREROLL_FONT_BOLD %}selected{% endif %}>off</option>
+   </select>
+  </div>
+ </div>
+ <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;">Maintenance Banner</h3>
+ <div class="grid3" style="margin-top:8px">
+  <div><label>Font Family</label><input name="MAINT_FONT_FAMILY" value="{{cfg.MAINT_FONT_FAMILY or 'DejaVuSansMono'}}"></div>
+  <div><label>Font Size (px, 0=auto)</label><input name="MAINT_FONT_PX" type="number" min="0" max="64" value="{{cfg.MAINT_FONT_PX or 0}}"></div>
+  <div><label>Bold</label>
+   <select name="MAINT_FONT_BOLD">
+    <option value="1" {% if cfg.MAINT_FONT_BOLD %}selected{% endif %}>on</option>
+    <option value="0" {% if not cfg.MAINT_FONT_BOLD %}selected{% endif %}>off</option>
+   </select>
+  </div>
+ </div>
+ <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;">Debug Overlay</h3>
+ <div class="grid3" style="margin-top:8px">
+  <div><label>Font Family</label><input name="FONT_FAMILY_DEBUG" value="{{cfg.FONT_FAMILY_DEBUG or 'DejaVuSansMono'}}"></div>
+  <div><label>Font Size (px or "auto")</label><input name="FONT_SIZE_DEBUG" value="{{cfg.FONT_SIZE_DEBUG or 'auto'}}"></div>
+  <div><label>Bold</label>
+   <select name="FONT_BOLD_DEBUG">
+    <option value="1" {% if cfg.FONT_BOLD_DEBUG %}selected{% endif %}>on</option>
+    <option value="0" {% if not cfg.FONT_BOLD_DEBUG %}selected{% endif %}>off</option>
+   </select>
+  </div>
+ </div>
+</section>
+
+<section>
+ <h2>Tickers (Top / Bottom / Alt Bottom)</h2>
+ <p class="muted">Format: <span class="mono">SYMBOL\nLABEL</span> one per line. Alt Bottom alternates with Bottom every other scroll.</p>
  <div class="row">
   <div class="col">
    <label>Top Row</label>
@@ -703,6 +728,10 @@ setInterval(updateWorkers,3000);
   <div class="col">
    <label>Bottom Row</label>
    <textarea name="TICKERS_BOT" rows="7">{{bot_pairs}}</textarea>
+  </div>
+  <div class="col">
+   <label>Alt Bottom Row (every other scroll)</label>
+   <textarea name="TICKERS_BOT2" rows="7">{{bot_pairs2}}</textarea>
   </div>
  </div>
  <div class="grid3" style="margin-top:8px">
@@ -797,29 +826,6 @@ setInterval(updateWorkers,3000);
 </section>
 
 <section>
- <h2>Scheduler & Dimming</h2>
- <div class="grid4">
-  <label><input type="checkbox" name="SCHEDULE_ENABLED" value="1" {% if cfg.SCHEDULE_ENABLED %}checked{% endif %}> Enable Off Window</label>
-  <div><label>Off Start (HH:MM)</label><input name="SCHEDULE_OFF_START" value="{{cfg.SCHEDULE_OFF_START or '23:00'}}"></div>
-  <div><label>Off End (HH:MM)</label><input name="SCHEDULE_OFF_END" value="{{cfg.SCHEDULE_OFF_END or '07:00'}}"></div>
-  <div><label>Blank FPS when Off</label><input name="SCHEDULE_BLANK_FPS" type="number" min="1" max="60" value="{{cfg.SCHEDULE_BLANK_FPS or 5}}"></div>
- </div>
- <div class="grid4" style="margin-top:8px">
-  <label><input type="checkbox" name="SCHEDULE_TEST_FORCE_OFF" value="1" {% if cfg.SCHEDULE_TEST_FORCE_OFF %}checked{% endif %}> Force Off (test)</label>
- </div>
- <hr style="border:none;border-top:1px solid #1c2434;margin:14px 0">
- <div style="margin-top:8px">
-  <label>Dim Schedule Windows</label>
-  <p class="muted">One per line: <span class="mono">HH:MM,HH:MM,PCT</span> &mdash; brightness % during that time window. Active when populated.</p>
-  <textarea name="DIM_WINDOWS" rows="4" class="mono">{{dim_windows_text}}</textarea>
- </div>
- <div class="grid3" style="margin-top:8px">
-  <label><input type="checkbox" name="DIM_TEST_ENABLED" value="1" {% if cfg.DIM_TEST_ENABLED %}checked{% endif %}> Test: force brightness</label>
-  <div><label>Dim Test %</label><input name="DIM_TEST_PCT" type="number" min="1" max="100" value="{{cfg.DIM_TEST_PCT or 0}}"></div>
- </div>
-</section>
-
-<section>
  <h2>Night Mode (Auto-Dim + Slow Scroll)</h2>
  <p class="muted">Automatically dim display and slow scroll speed during night hours. Overrides other dimming settings when active.</p>
  <div class="grid4">
@@ -834,36 +840,6 @@ setInterval(updateWorkers,3000);
  <p class="muted" style="margin-top:8px;">
   Example: 22:00-07:00 at 30% brightness and 50% scroll speed (half speed = slower, easier to read)
  </p>
-</section>
-
-<section>
- <h2>Fonts</h2>
- <div class="grid3">
-  <div><label>Base Font Family</label><input name="FONT_FAMILY_BASE" value="{{cfg.FONT_FAMILY_BASE or 'DejaVuSansMono'}}"></div>
-  <div><label>Scoreboard Font Family</label><input name="FONT_FAMILY_SCOREBOARD" value="{{cfg.FONT_FAMILY_SCOREBOARD or cfg.FONT_FAMILY_BASE or 'DejaVuSansMono'}}"></div>
-  <div><label>Debug Font Family</label><input name="FONT_FAMILY_DEBUG" value="{{cfg.FONT_FAMILY_DEBUG or cfg.FONT_FAMILY_BASE or 'DejaVuSansMono'}}"></div>
- </div>
- <div class="grid3" style="margin-top:8px">
-  <div><label>Row Font Size (px or "auto")</label><input name="FONT_SIZE_ROW" value="{{cfg.FONT_SIZE_ROW or 'auto'}}"></div>
-  <div><label>Scoreboard Font Size (px or "auto")</label><input name="FONT_SIZE_SB" value="{{cfg.FONT_SIZE_SB or 'auto'}}"></div>
-  <div><label>Debug Font Size (px or "auto")</label><input name="FONT_SIZE_DEBUG" value="{{cfg.FONT_SIZE_DEBUG or 'auto'}}"></div>
- </div>
- <div class="grid3" style="margin-top:8px">
-  <label><input type="checkbox" name="FONT_BOLD_BASE" value="1" {% if cfg.FONT_BOLD_BASE %}checked{% endif %}> Base Bold</label>
-  <label><input type="checkbox" name="FONT_BOLD_SB" value="1" {% if cfg.FONT_BOLD_SB %}checked{% endif %}> Scoreboard Bold</label>
-  <label><input type="checkbox" name="FONT_BOLD_DEBUG" value="1" {% if cfg.FONT_BOLD_DEBUG %}checked{% endif %}> Debug Bold</label>
- </div>
- <hr style="border:none;border-top:1px solid #1c2434;margin:14px 0">
- <div class="grid3">
-  <div><label>Preroll Font Family</label><input name="PREROLL_FONT_FAMILY" value="{{cfg.PREROLL_FONT_FAMILY or cfg.FONT_FAMILY_BASE or 'DejaVuSansMono'}}"></div>
-  <div><label>Preroll Font px (0=auto)</label><input name="PREROLL_FONT_PX" type="number" min="0" value="{{cfg.PREROLL_FONT_PX or 0}}"></div>
-  <label><input type="checkbox" name="PREROLL_FONT_BOLD" value="1" {% if cfg.PREROLL_FONT_BOLD %}checked{% endif %}> Preroll Bold</label>
- </div>
- <div class="grid3" style="margin-top:8px">
-  <div><label>Maintenance Font Family</label><input name="MAINT_FONT_FAMILY" value="{{cfg.MAINT_FONT_FAMILY or cfg.FONT_FAMILY_BASE or 'DejaVuSansMono'}}"></div>
-  <div><label>Maintenance Font px (0=auto)</label><input name="MAINT_FONT_PX" type="number" min="0" value="{{cfg.MAINT_FONT_PX or 0}}"></div>
-  <label><input type="checkbox" name="MAINT_FONT_BOLD" value="1" {% if cfg.MAINT_FONT_BOLD %}checked{% endif %}> Maintenance Bold</label>
- </div>
 </section>
 
 <section>
@@ -1169,6 +1145,7 @@ def home():
     cfg = load_cfg()
     cfg.setdefault("TICKERS_TOP", [])
     cfg.setdefault("TICKERS_BOT", [])
+    cfg.setdefault("TICKERS_BOT2", [])
     cfg.setdefault("HOLDINGS", {})
     cfg.setdefault("MICROFONT_ENABLED", False)
 
@@ -1178,9 +1155,9 @@ def home():
     preview_ok = os.path.exists(preview_path) and mode == "RGBMATRIX"
     preview_status = "ready" if preview_ok else ("Preview unavailable" if not preview_ok else "HDMI mode")
 
-    dim_windows_text = _dim_windows_to_text(cfg.get("DIM_WINDOWS"))
     top_pairs = _pairs_to_text(cfg.get("TICKERS_TOP"))
     bot_pairs = _pairs_to_text(cfg.get("TICKERS_BOT"))
+    bot_pairs2 = _pairs_to_text(cfg.get("TICKERS_BOT2"))
     holdings_text = _holdings_to_text(cfg.get("HOLDINGS"))
 
     return render_template_string(
@@ -1189,8 +1166,8 @@ def home():
         cfg=cfg,
         top_pairs=top_pairs,
         bot_pairs=bot_pairs,
+        bot_pairs2=bot_pairs2,
         holdings_text=holdings_text,
-        dim_windows_text=dim_windows_text,
         wh=f"{w}x{h}",
         mode=f"mode={mode}",
         scale=int(cfg.get("TICKER_SCALE", 6) or 6),
@@ -1236,6 +1213,7 @@ def save():
     # --- Tickers ---
     cfg["TICKERS_TOP"] = _parse_lines_pairs(request.form.get("TICKERS_TOP", ""))
     cfg["TICKERS_BOT"] = _parse_lines_pairs(request.form.get("TICKERS_BOT", ""))
+    cfg["TICKERS_BOT2"] = _parse_lines_pairs(request.form.get("TICKERS_BOT2", ""))
     cfg["REFRESH_SEC"] = _get_num(request.form, "REFRESH_SEC", cfg.get("REFRESH_SEC", 240), int)
     cfg["FRESH_SEC"] = _get_num(request.form, "FRESH_SEC", cfg.get("FRESH_SEC", 300), int)
 
@@ -1251,6 +1229,23 @@ def save():
     cfg["PREROLL_STYLE"] = request.form.get("PREROLL_STYLE", cfg.get("PREROLL_STYLE", "bigtime"))
     cfg["PREROLL_COLOR"] = request.form.get("PREROLL_COLOR", cfg.get("PREROLL_COLOR", "yellow"))
     cfg["PREROLL_PPS"] = _get_num(request.form, "PREROLL_PPS", cfg.get("PREROLL_PPS", 40.0), float)
+
+    # --- Fonts ---
+    cfg["FONT_FAMILY_BASE"] = request.form.get("FONT_FAMILY_BASE", cfg.get("FONT_FAMILY_BASE", "DejaVuSansMono"))
+    cfg["FONT_FAMILY_SCOREBOARD"] = request.form.get("FONT_FAMILY_SCOREBOARD", cfg.get("FONT_FAMILY_SCOREBOARD", "DejaVuSansMono"))
+    cfg["FONT_FAMILY_DEBUG"] = request.form.get("FONT_FAMILY_DEBUG", cfg.get("FONT_FAMILY_DEBUG", "DejaVuSansMono"))
+    cfg["FONT_SIZE_ROW"] = request.form.get("FONT_SIZE_ROW", cfg.get("FONT_SIZE_ROW", "auto"))
+    cfg["FONT_SIZE_SB"] = request.form.get("FONT_SIZE_SB", cfg.get("FONT_SIZE_SB", "auto"))
+    cfg["FONT_SIZE_DEBUG"] = request.form.get("FONT_SIZE_DEBUG", cfg.get("FONT_SIZE_DEBUG", "auto"))
+    cfg["FONT_BOLD_BASE"] = _get_bool(request.form, "FONT_BOLD_BASE", cfg.get("FONT_BOLD_BASE", True))
+    cfg["FONT_BOLD_SB"] = _get_bool(request.form, "FONT_BOLD_SB", cfg.get("FONT_BOLD_SB", False))
+    cfg["FONT_BOLD_DEBUG"] = _get_bool(request.form, "FONT_BOLD_DEBUG", cfg.get("FONT_BOLD_DEBUG", False))
+    cfg["PREROLL_FONT_FAMILY"] = request.form.get("PREROLL_FONT_FAMILY", cfg.get("PREROLL_FONT_FAMILY", "DejaVuSansMono"))
+    cfg["PREROLL_FONT_PX"] = _get_num(request.form, "PREROLL_FONT_PX", cfg.get("PREROLL_FONT_PX", 0), int)
+    cfg["PREROLL_FONT_BOLD"] = _get_bool(request.form, "PREROLL_FONT_BOLD", cfg.get("PREROLL_FONT_BOLD", False))
+    cfg["MAINT_FONT_FAMILY"] = request.form.get("MAINT_FONT_FAMILY", cfg.get("MAINT_FONT_FAMILY", "DejaVuSansMono"))
+    cfg["MAINT_FONT_PX"] = _get_num(request.form, "MAINT_FONT_PX", cfg.get("MAINT_FONT_PX", 0), int)
+    cfg["MAINT_FONT_BOLD"] = _get_bool(request.form, "MAINT_FONT_BOLD", cfg.get("MAINT_FONT_BOLD", False))
 
     # --- Message & Weather ---
     cfg["INJECT_MESSAGE"] = request.form.get("INJECT_MESSAGE", cfg.get("INJECT_MESSAGE", ""))
@@ -1277,27 +1272,13 @@ def save():
     cfg["WEATHER_ADVISORY_EVERY_N_SCROLLS"] = _get_num(request.form, "WEATHER_ADVISORY_EVERY_N_SCROLLS", cfg.get("WEATHER_ADVISORY_EVERY_N_SCROLLS", 10), int)
     cfg["WEATHER_ADVISORY_COLOR"] = request.form.get("WEATHER_ADVISORY_COLOR", cfg.get("WEATHER_ADVISORY_COLOR", "yellow"))
 
-    # --- Scheduler ---
-    cfg["SCHEDULE_ENABLED"] = _get_bool(request.form, "SCHEDULE_ENABLED", cfg.get("SCHEDULE_ENABLED", True))
-    cfg["SCHEDULE_OFF_START"] = request.form.get("SCHEDULE_OFF_START", cfg.get("SCHEDULE_OFF_START", "23:00"))
-    cfg["SCHEDULE_OFF_END"] = request.form.get("SCHEDULE_OFF_END", cfg.get("SCHEDULE_OFF_END", "07:00"))
-    cfg["SCHEDULE_BLANK_FPS"] = _get_num(request.form, "SCHEDULE_BLANK_FPS", cfg.get("SCHEDULE_BLANK_FPS", 5), int)
-    cfg["SCHEDULE_TEST_FORCE_OFF"] = _get_bool(request.form, "SCHEDULE_TEST_FORCE_OFF", cfg.get("SCHEDULE_TEST_FORCE_OFF", False))
-
-    # --- Dimming (DIM_WINDOWS schedule + test) ---
-    # Remove legacy dim keys if present
-    for old_key in ("DIM_ENABLED", "DIM_LEVEL", "DIM_CUSTOM_PCT", "DIM_SCHEDULE_ENABLED",
+    # Remove legacy dim/schedule keys if still present in old configs
+    for old_key in ("SCHEDULE_ENABLED", "SCHEDULE_OFF_START", "SCHEDULE_OFF_END", "SCHEDULE_BLANK_FPS",
+                     "SCHEDULE_TEST_FORCE_OFF", "DIM_WINDOWS", "DIM_TEST_ENABLED", "DIM_TEST_PCT",
+                     "DIM_ENABLED", "DIM_LEVEL", "DIM_CUSTOM_PCT", "DIM_SCHEDULE_ENABLED",
                      "DIM1_START", "DIM1_END", "DIM1_PCT", "DIM2_START", "DIM2_END", "DIM2_PCT",
                      "DIM3_START", "DIM3_END", "DIM3_PCT"):
         cfg.pop(old_key, None)
-    dim_wins_txt = request.form.get("DIM_WINDOWS", "")
-    dim_wins = _parse_dim_windows(dim_wins_txt)
-    if dim_wins:
-        cfg["DIM_WINDOWS"] = dim_wins
-    else:
-        cfg.pop("DIM_WINDOWS", None)
-    cfg["DIM_TEST_ENABLED"] = _get_bool(request.form, "DIM_TEST_ENABLED", cfg.get("DIM_TEST_ENABLED", False))
-    cfg["DIM_TEST_PCT"] = _get_num(request.form, "DIM_TEST_PCT", cfg.get("DIM_TEST_PCT", 0), int)
 
     # --- Night Mode ---
     cfg["NIGHT_MODE_ENABLED"] = _get_bool(request.form, "NIGHT_MODE_ENABLED", cfg.get("NIGHT_MODE_ENABLED", False))
@@ -1305,23 +1286,6 @@ def save():
     cfg["NIGHT_MODE_END"] = request.form.get("NIGHT_MODE_END", cfg.get("NIGHT_MODE_END", "07:00"))
     cfg["NIGHT_MODE_DIM_PCT"] = _get_num(request.form, "NIGHT_MODE_DIM_PCT", cfg.get("NIGHT_MODE_DIM_PCT", 30), int)
     cfg["NIGHT_MODE_SPEED_PCT"] = _get_num(request.form, "NIGHT_MODE_SPEED_PCT", cfg.get("NIGHT_MODE_SPEED_PCT", 50), int)
-
-    # --- Fonts ---
-    cfg["FONT_FAMILY_BASE"] = request.form.get("FONT_FAMILY_BASE", cfg.get("FONT_FAMILY_BASE", "DejaVuSansMono"))
-    cfg["FONT_FAMILY_SCOREBOARD"] = request.form.get("FONT_FAMILY_SCOREBOARD", cfg.get("FONT_FAMILY_SCOREBOARD", cfg.get("FONT_FAMILY_BASE", "DejaVuSansMono")))
-    cfg["FONT_FAMILY_DEBUG"] = request.form.get("FONT_FAMILY_DEBUG", cfg.get("FONT_FAMILY_DEBUG", cfg.get("FONT_FAMILY_BASE", "DejaVuSansMono")))
-    cfg["FONT_SIZE_ROW"] = request.form.get("FONT_SIZE_ROW", cfg.get("FONT_SIZE_ROW", "auto"))
-    cfg["FONT_SIZE_SB"] = request.form.get("FONT_SIZE_SB", cfg.get("FONT_SIZE_SB", "auto"))
-    cfg["FONT_SIZE_DEBUG"] = request.form.get("FONT_SIZE_DEBUG", cfg.get("FONT_SIZE_DEBUG", "auto"))
-    cfg["FONT_BOLD_BASE"] = _get_bool(request.form, "FONT_BOLD_BASE", cfg.get("FONT_BOLD_BASE", True))
-    cfg["FONT_BOLD_SB"] = _get_bool(request.form, "FONT_BOLD_SB", cfg.get("FONT_BOLD_SB", True))
-    cfg["FONT_BOLD_DEBUG"] = _get_bool(request.form, "FONT_BOLD_DEBUG", cfg.get("FONT_BOLD_DEBUG", False))
-    cfg["PREROLL_FONT_FAMILY"] = request.form.get("PREROLL_FONT_FAMILY", cfg.get("PREROLL_FONT_FAMILY", cfg.get("FONT_FAMILY_BASE", "DejaVuSansMono")))
-    cfg["PREROLL_FONT_PX"] = _get_num(request.form, "PREROLL_FONT_PX", cfg.get("PREROLL_FONT_PX", 0), int)
-    cfg["PREROLL_FONT_BOLD"] = _get_bool(request.form, "PREROLL_FONT_BOLD", cfg.get("PREROLL_FONT_BOLD", True))
-    cfg["MAINT_FONT_FAMILY"] = request.form.get("MAINT_FONT_FAMILY", cfg.get("MAINT_FONT_FAMILY", cfg.get("FONT_FAMILY_BASE", "DejaVuSansMono")))
-    cfg["MAINT_FONT_PX"] = _get_num(request.form, "MAINT_FONT_PX", cfg.get("MAINT_FONT_PX", 0), int)
-    cfg["MAINT_FONT_BOLD"] = _get_bool(request.form, "MAINT_FONT_BOLD", cfg.get("MAINT_FONT_BOLD", True))
 
     # --- Scoreboard ---
     cfg["SCOREBOARD_ENABLED"] = _get_bool(request.form, "SCOREBOARD_ENABLED", cfg.get("SCOREBOARD_ENABLED", True))
@@ -1571,13 +1535,41 @@ def action_bright_mode():
     flash("OK Bright mode for 30 min")
     return redirect(url_for("home"))
 
+@app.post("/action/bright-30")
+def action_bright_30():
+    """Set quick brightness to 30%."""
+    cfg = load_cfg()
+    cfg["QUICK_DIM_PCT"] = 30
+    atomic_save_cfg(cfg)
+    flash("OK Brightness set to 30%")
+    return redirect(url_for("home"))
+
+@app.post("/action/bright-60")
+def action_bright_60():
+    """Set quick brightness to 60%."""
+    cfg = load_cfg()
+    cfg["QUICK_DIM_PCT"] = 60
+    atomic_save_cfg(cfg)
+    flash("OK Brightness set to 60%")
+    return redirect(url_for("home"))
+
+@app.post("/action/bright-100")
+def action_bright_100():
+    """Set quick brightness to 100% (full brightness)."""
+    cfg = load_cfg()
+    cfg["QUICK_DIM_PCT"] = 100
+    atomic_save_cfg(cfg)
+    flash("OK Brightness set to 100%")
+    return redirect(url_for("home"))
+
 @app.post("/action/clear-override")
 def action_clear_override():
-    """Clear any active override."""
+    """Clear any active override and reset quick brightness."""
     cfg = load_cfg()
     cfg["OVERRIDE_MODE"] = "OFF"
     cfg["OVERRIDE_DURATION_MIN"] = 0
     cfg["OVERRIDE_MESSAGE_TEXT"] = ""
+    cfg["QUICK_DIM_PCT"] = 0  # Reset quick brightness
     atomic_save_cfg(cfg)
     flash("OK Override cleared")
     return redirect(url_for("home"))
@@ -1598,33 +1590,6 @@ def action_stop_service():
         flash(f"OK Service {SYSTEMD_SERVICE} stopped")
     except Exception as e:
         flash(f" Stop failed: {e}")
-    return redirect(url_for("home"))
-
-@app.post("/action/dim-low")
-def action_dim_low():
-    """Set dimming to 30% (all-day window)."""
-    cfg = load_cfg()
-    cfg["DIM_WINDOWS"] = [{"start": "00:00", "end": "23:59", "pct": 30}]
-    atomic_save_cfg(cfg)
-    flash("OK Dimming set to 30%")
-    return redirect(url_for("home"))
-
-@app.post("/action/dim-medium")
-def action_dim_medium():
-    """Set dimming to 60% (all-day window)."""
-    cfg = load_cfg()
-    cfg["DIM_WINDOWS"] = [{"start": "00:00", "end": "23:59", "pct": 60}]
-    atomic_save_cfg(cfg)
-    flash("OK Dimming set to 60%")
-    return redirect(url_for("home"))
-
-@app.post("/action/dim-high")
-def action_dim_high():
-    """Clear dim schedule (100% brightness)."""
-    cfg = load_cfg()
-    cfg.pop("DIM_WINDOWS", None)
-    atomic_save_cfg(cfg)
-    flash("OK Dimming cleared (100% brightness)")
     return redirect(url_for("home"))
 
 @app.post("/action/show-message")
