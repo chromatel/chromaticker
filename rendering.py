@@ -19,7 +19,6 @@ from utils import normalize_ws, now_local
 # Globals - will be set by ticker.py via set_globals()
 W = 192
 H = 16
-OUTPUT_MODE = "RGBMATRIX"  # "RGBMATRIX" or "HDMI"
 ROW_H = 8
 TOP_Y = 0
 BOT_Y = 8
@@ -63,10 +62,6 @@ NIGHT_MODE_DIM_PCT = 30
 NIGHT_MODE_SPEED_PCT = 75
 QUICK_DIM_PCT = 0  # Quick brightness override (1-100); 0 = disabled, uses normal night-mode logic
 
-FORCE_KMS = False
-USE_SDL_SCALED = True
-USE_BUSY_LOOP = False
-TICKER_SCALE = 8
 TZINFO = None
 
 HOLDINGS = {}
@@ -184,7 +179,7 @@ def _glyph_surface_5x7(text: str, color=(255,255,0), row_h=8, spacing=1) -> pyga
     yoff = max(0, (row_h - char_h) // 2)
     x = 0
     for ch in text:
-        pat = _MICRO_GLYPHS.get(ch.upper() if 'A' <= ch <= 'Z' else ch, ["11111","00001","00010","00100","01000","00000","00100"])
+        pat = _MICRO_GLYPHS.get(ch.upper(), ["11111","00001","00010","00100","01000","00000","00100"])
         for ry, row in enumerate(pat):
             for rx, bit in enumerate(row):
                 if bit == '1': surf.set_at((x+rx, yoff+ry), color)
@@ -334,8 +329,6 @@ def init_rgb_matrix(width=192, height=16, brightness=100, hardware_mapping='adaf
 
     # cols = per-panel width (total width / chain_length)
     cols_per_panel = width // max(1, chain_length) if chain_length > 1 else width
-    print(f"[RGB Matrix] Initializing {width}x{height} ({cols_per_panel}cols x {chain_length}chain), brightness={brightness}, hw={hardware_mapping}", flush=True)
-
     try:
         from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
@@ -364,7 +357,6 @@ def init_rgb_matrix(width=192, height=16, brightness=100, hardware_mapping='adaf
         if panel_type:
             options.panel_type = panel_type
 
-        print(f"[RGB Matrix] Options: rows={options.rows} cols={options.cols} chain={options.chain_length} parallel={options.parallel} hw={options.hardware_mapping}", flush=True)
         RGB_MATRIX = RGBMatrix(options=options)
         RGB_CANVAS = RGB_MATRIX.CreateFrameCanvas()
 
@@ -450,59 +442,20 @@ def _resolve_px_auto_sb():
 
 # ------------------------------ PYGAME / FONTS ----------------------------------------------------
 def init_pygame():
-    """Initialize pygame and create the output surface/window."""
+    """Initialize pygame for RGBMATRIX output (headless, no display window)."""
     os.environ.setdefault("XDG_RUNTIME_DIR", "/tmp")
-    if OUTPUT_MODE == "RGBMATRIX":
-        # RGB Matrix mode - absolute minimal pygame init
-        os.environ["SDL_VIDEODRIVER"] = "dummy"
-        os.environ["SDL_AUDIODRIVER"] = "dummy"
-        
-        # Minimal init for RGBMATRIX mode - just fonts and surfaces
-        try:
-            pygame.display.init()
-            pygame.font.init()
-            clock = pygame.time.Clock()
-            screen = pygame.Surface((W, H))
-            print(f"[PYGAME] Initialized for RGBMATRIX mode ({W}x{H})", flush=True)
-            return screen, clock, False
-        except Exception as e:
-            print(f"[PYGAME] Init error: {e}", flush=True)
-            raise
-    else:
-        # HDMI mode - create display window
-        if FORCE_KMS:
-            os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
-        os.environ.setdefault("SDL_RENDER_SCALE_QUALITY", "0")
-        os.environ.setdefault("SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR", "1")
-        os.environ.setdefault("SDL_RENDER_VSYNC", "1")
-        pygame.init()
-        pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN])
+    os.environ["SDL_VIDEODRIVER"] = "dummy"
+    os.environ["SDL_AUDIODRIVER"] = "dummy"
+    try:
+        pygame.display.init()
+        pygame.font.init()
         clock = pygame.time.Clock()
-        
-        flags = pygame.FULLSCREEN | pygame.DOUBLEBUF
-        scaled_flag = pygame.SCALED if (USE_SDL_SCALED and hasattr(pygame, "SCALED")) else 0
-        if scaled_flag:
-            flags |= scaled_flag
-        try:
-            if scaled_flag:
-                screen = pygame.display.set_mode((W, H), flags, vsync=1)
-                use_hw_scale = True
-            else:
-                win_size = (W * TICKER_SCALE, H * TICKER_SCALE)
-                try:
-                    screen = pygame.display.set_mode(win_size, flags, vsync=1)
-                except TypeError:
-                    screen = pygame.display.set_mode(win_size, flags)
-                use_hw_scale = False
-        except TypeError:
-            if scaled_flag:
-                screen = pygame.display.set_mode((W, H), flags)
-                use_hw_scale = True
-            else:
-                screen = pygame.display.set_mode((W * TICKER_SCALE, H * TICKER_SCALE), flags)
-                use_hw_scale = False
-        pygame.mouse.set_visible(False)
-        return screen, clock, use_hw_scale
+        screen = pygame.Surface((W, H))
+        print(f"[PYGAME] Initialized ({W}x{H})", flush=True)
+        return screen, clock
+    except Exception as e:
+        print(f"[PYGAME] Init error: {e}", flush=True)
+        raise
 
 
 def make_font(family: str, px: int, bold: bool):

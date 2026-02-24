@@ -240,9 +240,6 @@ def _read_preview_png_bytes(cfg: dict, scale: int = 6) -> tuple:
             " pip install pillow\n"
         ), "text/plain"
     
-    mode = (cfg.get("OUTPUT_MODE") or "HDMI").upper()
-    
-    # Both HDMI and RGBMATRIX modes now save preview files
     preview_path = "/tmp/ticker_preview.png"
     if not os.path.exists(preview_path):
         return False, f"Preview file not found: {preview_path}\nEnsure the ticker is running.", "text/plain"
@@ -332,9 +329,9 @@ HOME_HTML = """
  <div class="preview-wrap">
    <div class="preview-card">
      <img id="qprev" src="{{ url_for('preview_png') }}?scale={{scale}}&t={{nowts}}" alt="preview" style="image-rendering:pixelated;max-width:100%;height:auto">
-     <div class="preview-meta mono">{{wh}} {{mode}} scale={{scale}} {{preview_status}}</div>
+     <div class="preview-meta mono">{{wh}} scale={{scale}} {{preview_status}}</div>
    </div>
-   <div class="hint">If the image doesn't move: ensure the ticker is running, OUTPUT_MODE is <b>RGBMATRIX</b>, and Pillow is installed in the UI's venv.<br>
+   <div class="hint">If the image doesn't move: ensure the ticker is running and Pillow is installed in the UI's venv.<br>
    For a larger view and controls, open <a href="{{ url_for('preview_page') }}">Live Preview</a>.</div>
  </div>
 </section>
@@ -499,15 +496,7 @@ setInterval(updateWorkers,3000);
 
 <section>
  <h2>Display & Layout</h2>
- <div class="grid4">
-  <div>
-   <label>Output Mode</label>
-   <select name="OUTPUT_MODE">
-    {% for opt in ["RGBMATRIX","HDMI"] %}
-    <option value="{{opt}}" {% if cfg.OUTPUT_MODE==opt %}selected{% endif %}>{{opt}}</option>
-    {% endfor %}
-   </select>
-  </div>
+ <div class="grid3">
   <div><label>Layout</label>
    <select name="LAYOUT">
     {% for opt in ["","single","dual"] %}
@@ -529,15 +518,9 @@ setInterval(updateWorkers,3000);
   <div><label>Bottom PPS</label><input name="PPS_BOT" type="number" step="0.5" value="{{cfg.PPS_BOT or 20.0}}"></div>
   <div><label>Single PPS</label><input name="PPS_SINGLE" type="number" step="0.5" value="{{cfg.PPS_SINGLE or 20.0}}"></div>
  </div>
- <div class="grid3" style="margin-top:8px">
+ <div class="grid2" style="margin-top:8px">
   <div><label>Width (W)</label><input name="W" type="number" value="{{cfg.W or 0}}"></div>
   <div><label>Height (H)</label><input name="H" type="number" value="{{cfg.H or 0}}"></div>
-  <div><label>Scale (HDMI)</label><input name="TICKER_SCALE" type="number" value="{{cfg.TICKER_SCALE or 8}}"></div>
- </div>
- <div class="grid3" style="margin-top:8px">
-  <label><input type="checkbox" name="FORCE_KMS" value="1" {% if cfg.FORCE_KMS %}checked{% endif %}> Force KMS/DRM</label>
-  <label><input type="checkbox" name="USE_SDL_SCALED" value="1" {% if cfg.USE_SDL_SCALED %}checked{% endif %}> Use SDL Scaled</label>
-  <label><input type="checkbox" name="USE_BUSY_LOOP" value="1" {% if cfg.USE_BUSY_LOOP %}checked{% endif %}> Busy Loop Timing</label>
  </div>
  <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;">RGB Matrix Hardware (RGBMATRIX mode only)</h3>
  <p class="muted">These settings configure the rpi-rgb-led-matrix library for direct HUB75 LED panel control.</p>
@@ -653,66 +636,6 @@ setInterval(updateWorkers,3000);
   <div>
    <label>Scroll Speed (PPS)</label>
    <input name="PREROLL_PPS" type="number" step="0.5" min="10" max="100" value="{{cfg.PREROLL_PPS or 40.0}}" title="Pixels per second for marquee style">
-  </div>
- </div>
-</section>
-
-<section>
- <h2>Fonts</h2>
- <p class="muted">Font family names must match files in the <span class="mono">fonts/</span> directory (without extension). Size "auto" picks the largest that fits the row height. Use 0 for auto px on fixed-px fields.</p>
- <h3 style="margin-top:8px;font-size:15px;color:#94a3b8;">Ticker Rows</h3>
- <div class="grid3" style="margin-top:8px">
-  <div><label>Font Family</label><input name="FONT_FAMILY_BASE" value="{{cfg.FONT_FAMILY_BASE or 'DejaVuSansMono'}}"></div>
-  <div><label>Font Size (px or "auto")</label><input name="FONT_SIZE_ROW" value="{{cfg.FONT_SIZE_ROW or 'auto'}}"></div>
-  <div><label>Bold</label>
-   <select name="FONT_BOLD_BASE">
-    <option value="1" {% if cfg.FONT_BOLD_BASE %}selected{% endif %}>on</option>
-    <option value="0" {% if not cfg.FONT_BOLD_BASE %}selected{% endif %}>off</option>
-   </select>
-  </div>
- </div>
- <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;">Scoreboard</h3>
- <div class="grid3" style="margin-top:8px">
-  <div><label>Font Family</label><input name="FONT_FAMILY_SCOREBOARD" value="{{cfg.FONT_FAMILY_SCOREBOARD or 'DejaVuSansMono'}}"></div>
-  <div><label>Font Size (px or "auto")</label><input name="FONT_SIZE_SB" value="{{cfg.FONT_SIZE_SB or 'auto'}}"></div>
-  <div><label>Bold</label>
-   <select name="FONT_BOLD_SB">
-    <option value="1" {% if cfg.FONT_BOLD_SB %}selected{% endif %}>on</option>
-    <option value="0" {% if not cfg.FONT_BOLD_SB %}selected{% endif %}>off</option>
-   </select>
-  </div>
- </div>
- <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;">Preroll</h3>
- <div class="grid3" style="margin-top:8px">
-  <div><label>Font Family</label><input name="PREROLL_FONT_FAMILY" value="{{cfg.PREROLL_FONT_FAMILY or 'DejaVuSansMono'}}"></div>
-  <div><label>Font Size (px, 0=auto)</label><input name="PREROLL_FONT_PX" type="number" min="0" max="64" value="{{cfg.PREROLL_FONT_PX or 0}}"></div>
-  <div><label>Bold</label>
-   <select name="PREROLL_FONT_BOLD">
-    <option value="1" {% if cfg.PREROLL_FONT_BOLD %}selected{% endif %}>on</option>
-    <option value="0" {% if not cfg.PREROLL_FONT_BOLD %}selected{% endif %}>off</option>
-   </select>
-  </div>
- </div>
- <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;">Maintenance Banner</h3>
- <div class="grid3" style="margin-top:8px">
-  <div><label>Font Family</label><input name="MAINT_FONT_FAMILY" value="{{cfg.MAINT_FONT_FAMILY or 'DejaVuSansMono'}}"></div>
-  <div><label>Font Size (px, 0=auto)</label><input name="MAINT_FONT_PX" type="number" min="0" max="64" value="{{cfg.MAINT_FONT_PX or 0}}"></div>
-  <div><label>Bold</label>
-   <select name="MAINT_FONT_BOLD">
-    <option value="1" {% if cfg.MAINT_FONT_BOLD %}selected{% endif %}>on</option>
-    <option value="0" {% if not cfg.MAINT_FONT_BOLD %}selected{% endif %}>off</option>
-   </select>
-  </div>
- </div>
- <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;">Debug Overlay</h3>
- <div class="grid3" style="margin-top:8px">
-  <div><label>Font Family</label><input name="FONT_FAMILY_DEBUG" value="{{cfg.FONT_FAMILY_DEBUG or 'DejaVuSansMono'}}"></div>
-  <div><label>Font Size (px or "auto")</label><input name="FONT_SIZE_DEBUG" value="{{cfg.FONT_SIZE_DEBUG or 'auto'}}"></div>
-  <div><label>Bold</label>
-   <select name="FONT_BOLD_DEBUG">
-    <option value="1" {% if cfg.FONT_BOLD_DEBUG %}selected{% endif %}>on</option>
-    <option value="0" {% if not cfg.FONT_BOLD_DEBUG %}selected{% endif %}>off</option>
-   </select>
   </div>
  </div>
 </section>
@@ -1150,10 +1073,9 @@ def home():
     cfg.setdefault("MICROFONT_ENABLED", False)
 
     w, h = _derive_panel_WH(cfg)
-    mode = (cfg.get("OUTPUT_MODE") or "HDMI").upper()
     preview_path = "/tmp/ticker_preview.png"
-    preview_ok = os.path.exists(preview_path) and mode == "RGBMATRIX"
-    preview_status = "ready" if preview_ok else ("Preview unavailable" if not preview_ok else "HDMI mode")
+    preview_ok = os.path.exists(preview_path)
+    preview_status = "ready" if preview_ok else "Preview unavailable"
 
     top_pairs = _pairs_to_text(cfg.get("TICKERS_TOP"))
     bot_pairs = _pairs_to_text(cfg.get("TICKERS_BOT"))
@@ -1169,8 +1091,7 @@ def home():
         bot_pairs2=bot_pairs2,
         holdings_text=holdings_text,
         wh=f"{w}x{h}",
-        mode=f"mode={mode}",
-        scale=int(cfg.get("TICKER_SCALE", 6) or 6),
+        scale=8,
         preview_status=preview_status,
         nowts=int(time.time()),
     )
@@ -1179,7 +1100,6 @@ def home():
 def save():
     cfg = load_cfg()
     # --- Display & Layout ---
-    cfg["OUTPUT_MODE"] = request.form.get("OUTPUT_MODE", cfg.get("OUTPUT_MODE", "HDMI"))
     cfg["LAYOUT"] = request.form.get("LAYOUT", cfg.get("LAYOUT", ""))
     cfg["TICKER_TZ"] = request.form.get("TICKER_TZ", cfg.get("TICKER_TZ", ""))
     cfg["MICROFONT_ENABLED"] = _get_bool(request.form, "MICROFONT_ENABLED", cfg.get("MICROFONT_ENABLED", False))
@@ -1190,10 +1110,6 @@ def save():
     cfg["PPS_TOP"] = _get_num(request.form, "PPS_TOP", cfg.get("PPS_TOP", 16.0), float)
     cfg["PPS_BOT"] = _get_num(request.form, "PPS_BOT", cfg.get("PPS_BOT", 20.0), float)
     cfg["PPS_SINGLE"] = _get_num(request.form, "PPS_SINGLE", cfg.get("PPS_SINGLE", 20.0), float)
-    cfg["TICKER_SCALE"] = _get_num(request.form, "TICKER_SCALE", cfg.get("TICKER_SCALE", 8), int)
-    cfg["FORCE_KMS"] = _get_bool(request.form, "FORCE_KMS", cfg.get("FORCE_KMS", False))
-    cfg["USE_SDL_SCALED"] = _get_bool(request.form, "USE_SDL_SCALED", cfg.get("USE_SDL_SCALED", True))
-    cfg["USE_BUSY_LOOP"] = _get_bool(request.form, "USE_BUSY_LOOP", cfg.get("USE_BUSY_LOOP", False))
     
     # --- RGB Matrix Hardware ---
     cfg["RGB_BRIGHTNESS"] = _get_num(request.form, "RGB_BRIGHTNESS", cfg.get("RGB_BRIGHTNESS", 100), int)
@@ -1230,23 +1146,6 @@ def save():
     cfg["PREROLL_COLOR"] = request.form.get("PREROLL_COLOR", cfg.get("PREROLL_COLOR", "yellow"))
     cfg["PREROLL_PPS"] = _get_num(request.form, "PREROLL_PPS", cfg.get("PREROLL_PPS", 40.0), float)
 
-    # --- Fonts ---
-    cfg["FONT_FAMILY_BASE"] = request.form.get("FONT_FAMILY_BASE", cfg.get("FONT_FAMILY_BASE", "DejaVuSansMono"))
-    cfg["FONT_FAMILY_SCOREBOARD"] = request.form.get("FONT_FAMILY_SCOREBOARD", cfg.get("FONT_FAMILY_SCOREBOARD", "DejaVuSansMono"))
-    cfg["FONT_FAMILY_DEBUG"] = request.form.get("FONT_FAMILY_DEBUG", cfg.get("FONT_FAMILY_DEBUG", "DejaVuSansMono"))
-    cfg["FONT_SIZE_ROW"] = request.form.get("FONT_SIZE_ROW", cfg.get("FONT_SIZE_ROW", "auto"))
-    cfg["FONT_SIZE_SB"] = request.form.get("FONT_SIZE_SB", cfg.get("FONT_SIZE_SB", "auto"))
-    cfg["FONT_SIZE_DEBUG"] = request.form.get("FONT_SIZE_DEBUG", cfg.get("FONT_SIZE_DEBUG", "auto"))
-    cfg["FONT_BOLD_BASE"] = _get_bool(request.form, "FONT_BOLD_BASE", cfg.get("FONT_BOLD_BASE", True))
-    cfg["FONT_BOLD_SB"] = _get_bool(request.form, "FONT_BOLD_SB", cfg.get("FONT_BOLD_SB", False))
-    cfg["FONT_BOLD_DEBUG"] = _get_bool(request.form, "FONT_BOLD_DEBUG", cfg.get("FONT_BOLD_DEBUG", False))
-    cfg["PREROLL_FONT_FAMILY"] = request.form.get("PREROLL_FONT_FAMILY", cfg.get("PREROLL_FONT_FAMILY", "DejaVuSansMono"))
-    cfg["PREROLL_FONT_PX"] = _get_num(request.form, "PREROLL_FONT_PX", cfg.get("PREROLL_FONT_PX", 0), int)
-    cfg["PREROLL_FONT_BOLD"] = _get_bool(request.form, "PREROLL_FONT_BOLD", cfg.get("PREROLL_FONT_BOLD", False))
-    cfg["MAINT_FONT_FAMILY"] = request.form.get("MAINT_FONT_FAMILY", cfg.get("MAINT_FONT_FAMILY", "DejaVuSansMono"))
-    cfg["MAINT_FONT_PX"] = _get_num(request.form, "MAINT_FONT_PX", cfg.get("MAINT_FONT_PX", 0), int)
-    cfg["MAINT_FONT_BOLD"] = _get_bool(request.form, "MAINT_FONT_BOLD", cfg.get("MAINT_FONT_BOLD", False))
-
     # --- Message & Weather ---
     cfg["INJECT_MESSAGE"] = request.form.get("INJECT_MESSAGE", cfg.get("INJECT_MESSAGE", ""))
     cfg["MESSAGE_EVERY"] = _get_num(request.form, "MESSAGE_EVERY", cfg.get("MESSAGE_EVERY", 0), int)
@@ -1272,12 +1171,13 @@ def save():
     cfg["WEATHER_ADVISORY_EVERY_N_SCROLLS"] = _get_num(request.form, "WEATHER_ADVISORY_EVERY_N_SCROLLS", cfg.get("WEATHER_ADVISORY_EVERY_N_SCROLLS", 10), int)
     cfg["WEATHER_ADVISORY_COLOR"] = request.form.get("WEATHER_ADVISORY_COLOR", cfg.get("WEATHER_ADVISORY_COLOR", "yellow"))
 
-    # Remove legacy dim/schedule keys if still present in old configs
+    # Remove legacy keys if still present in old configs
     for old_key in ("SCHEDULE_ENABLED", "SCHEDULE_OFF_START", "SCHEDULE_OFF_END", "SCHEDULE_BLANK_FPS",
                      "SCHEDULE_TEST_FORCE_OFF", "DIM_WINDOWS", "DIM_TEST_ENABLED", "DIM_TEST_PCT",
                      "DIM_ENABLED", "DIM_LEVEL", "DIM_CUSTOM_PCT", "DIM_SCHEDULE_ENABLED",
                      "DIM1_START", "DIM1_END", "DIM1_PCT", "DIM2_START", "DIM2_END", "DIM2_PCT",
-                     "DIM3_START", "DIM3_END", "DIM3_PCT"):
+                     "DIM3_START", "DIM3_END", "DIM3_PCT",
+                     "OUTPUT_MODE", "TICKER_SCALE", "FORCE_KMS", "USE_SDL_SCALED", "USE_BUSY_LOOP"):
         cfg.pop(old_key, None)
 
     # --- Night Mode ---
@@ -1308,7 +1208,7 @@ def save():
     cfg["SCOREBOARD_INCLUDE_OTHERS"] = _get_bool(request.form, "SCOREBOARD_INCLUDE_OTHERS", cfg.get("SCOREBOARD_INCLUDE_OTHERS", False))
     cfg["SCOREBOARD_ONLY_MY_TEAMS"] = _get_bool(request.form, "SCOREBOARD_ONLY_MY_TEAMS", cfg.get("SCOREBOARD_ONLY_MY_TEAMS", True))
     cfg["SCOREBOARD_MAX_GAMES"] = _get_num(request.form, "SCOREBOARD_MAX_GAMES", cfg.get("SCOREBOARD_MAX_GAMES", 2), int)
-    cfg["SCOREBOARD_SCROLL_ENABLED"] = True if request.form.get("SCOREBOARD_SCROLL_ENABLED", "1") == "1" else False
+    cfg["SCOREBOARD_SCROLL_ENABLED"] = request.form.get("SCOREBOARD_SCROLL_ENABLED", "1") == "1"
     cfg["SCOREBOARD_STATIC_DWELL_SEC"] = _get_num(request.form, "SCOREBOARD_STATIC_DWELL_SEC", cfg.get("SCOREBOARD_STATIC_DWELL_SEC", 4), int)
     cfg["SCOREBOARD_STATIC_ALIGN"] = request.form.get("SCOREBOARD_STATIC_ALIGN", cfg.get("SCOREBOARD_STATIC_ALIGN", "left"))
     # Test harness
@@ -1407,14 +1307,12 @@ def restart_ticker():
 def preview_page():
     cfg = load_cfg()
     w, h = _derive_panel_WH(cfg)
-    mode = (cfg.get("OUTPUT_MODE") or "HDMI").upper()
     preview_path = "/tmp/ticker_preview.png"
     status = "ready" if os.path.exists(preview_path) else "waiting for ticker"
     return render_template_string(
         PREVIEW_HTML,
-        scale=int(cfg.get("TICKER_SCALE", 6) or 6),
+        scale=8,
         wh=f"{w}x{h}",
-        mode=f"mode={mode}",
         preview_status=status,
         nowts=int(time.time()),
     )
@@ -1423,11 +1321,10 @@ def preview_page():
 @app.get("/documentation")
 def documentation():
     """Serve docs.html from the project directory."""
-    import datetime
     docs_path = os.path.join(BASE_DIR, "docs.html")
     if not os.path.exists(docs_path):
         return Response("Documentation file (docs.html) not found in project directory.", status=404, mimetype="text/plain")
-    version = datetime.datetime.now().strftime("%Y.%m.%d")
+    version = time.strftime("%Y.%m.%d")
     with open(docs_path, "r", encoding="utf-8") as f:
         raw = f.read()
     raw = raw.replace("v{{ version }}", f"v{version}")
@@ -1437,7 +1334,7 @@ def documentation():
 def preview_png():
     cfg = load_cfg()
     try:
-        scale = int(request.args.get("scale", cfg.get("TICKER_SCALE", 6) or 6))
+        scale = int(request.args.get("scale", 8))
     except Exception:
         scale = 6
     ok, payload, mime = _read_preview_png_bytes(cfg, scale=scale)

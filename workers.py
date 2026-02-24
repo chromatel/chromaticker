@@ -478,7 +478,6 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
                         payloads.append({"league":"NHL","games":trimmed,"ts":now})
 
             any_live = any(any(g["state"] == "LIVE" for g in p.get("games", [])) for p in payloads)
-            any_window = any(any(g["state"] == "PREGAME" for g in p.get("games", [])) for p in payloads)
             cadence = live_cadence if any_live else pre_cadence
 
             for p in payloads:
