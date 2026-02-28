@@ -11,7 +11,7 @@ import pygame
 import os
 import time
 from datetime import datetime, time as dtime
-import queue as queue_std
+
 
 # Import normalize_ws from utils (avoid duplication)
 from utils import normalize_ws, now_local
@@ -200,6 +200,48 @@ def _micro_sanitize(text: str) -> str:
 
 # ===== SCOREBOARD TEAM ABBREVIATION COLORS =====
 # LED-friendly colors (bright enough to be visible on dark panel)
+# ===== TEAM LOGO SUPPORT =====
+_SCRIPT_DIR = "/home/fpp/led-ticker"
+_team_logo_cache: dict = {}  # key: "nhl/mtl" → Surface | None (None = tried, not found)
+print(f"[TEAM LOGO] script dir = {_SCRIPT_DIR}", flush=True)
+
+def clear_team_logo_cache():
+    """Flush the logo cache so new files are picked up without a full restart."""
+    _team_logo_cache.clear()
+    print("[TEAM LOGO] cache cleared", flush=True)
+
+def _load_team_logo(code: str, league: str, target_h: int):
+    """Load nhl/<code>.png or nfl/<code>.png, scale to target_h px tall (aspect-preserved).
+    Returns a pygame.Surface (SRCALPHA) or None. Results cached per process;
+    call clear_team_logo_cache() to pick up newly added files without restarting."""
+    key = f"{league.lower()}/{code.lower()}"
+    if key in _team_logo_cache:
+        return _team_logo_cache[key]
+    path = os.path.join(_SCRIPT_DIR, league.lower(), f"{code.lower()}.png")
+    if not os.path.isfile(path):
+        _team_logo_cache[key] = None
+        print(f"[TEAM LOGO] not found: {path}", flush=True)
+        return None
+    try:
+        from PIL import Image as _PILImg
+        pil = _PILImg.open(path).convert("RGBA")
+        ow, oh = pil.size
+        if oh == 0:
+            _team_logo_cache[key] = None
+            return None
+        nw = max(1, int(ow * target_h / oh))
+        pil = pil.resize((nw, target_h), _PILImg.LANCZOS)
+        raw = pygame.image.frombuffer(pil.tobytes(), (nw, target_h), "RGBA")
+        surf = pygame.Surface((nw, target_h), pygame.SRCALPHA)
+        surf.blit(raw, (0, 0))
+        _team_logo_cache[key] = surf
+        print(f"[TEAM LOGO] {key} → {nw}×{target_h}px", flush=True)
+        return surf
+    except Exception as e:
+        print(f"[TEAM LOGO] failed {key}: {e}", flush=True)
+        _team_logo_cache[key] = None
+        return None
+
 _SCOREBOARD_NHL_COLORS = {
     "ANA": (252,  76,   2), "ARI": (200,  50,  70), "BOS": (252, 181,  20),
     "BUF": (  0,  83, 155), "CAR": (204,   0,   0), "CBJ": (206,  17,  38),
@@ -228,13 +270,22 @@ _SCOREBOARD_NFL_COLORS = {
 }
 
 def _render_team_abbr(code: str, league: str, w: int, h: int) -> "pygame.Surface":
-    """Render a 3-letter team abbreviation centered in a w×h surface in team color."""
-    lut = _SCOREBOARD_NFL_COLORS if league == "NFL" else _SCOREBOARD_NHL_COLORS
-    color = lut.get(code.upper(), (255, 255, 255))
-    text_surf = _glyph_surface_5x7(code[:3].upper(), color, h, spacing=1)
+    """Render team logo (nhl/<code>.png / nfl/<code>.png) if found, else fall back to
+    3-letter abbreviation in the team's primary color."""
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
     surf.fill((0, 0, 0, 0))
-    surf.blit(text_surf, ((w - text_surf.get_width()) // 2, 0))
+    logo = _load_team_logo(code, league, h)
+    if logo is not None:
+        lw = logo.get_width()
+        # Centre horizontally; clip src rect if wider than slot
+        src_rect = pygame.Rect(0, 0, min(lw, w), h)
+        lx = max(0, (w - lw) // 2)
+        surf.blit(logo, (lx, 0), src_rect)
+    else:
+        lut = _SCOREBOARD_NFL_COLORS if league == "NFL" else _SCOREBOARD_NHL_COLORS
+        color = lut.get(code.upper(), (255, 255, 255))
+        text_surf = _glyph_surface_5x7(code[:3].upper(), color, h, spacing=1)
+        surf.blit(text_surf, ((w - text_surf.get_width()) // 2, 0))
     return surf
 # ===== END SCOREBOARD TEAM ABBREVIATION COLORS =====
 
@@ -268,9 +319,9 @@ def fmt_value_currency_compact(amount: float) -> str:
     if amount is None: return "$--"
     try: x=float(amount)
     except Exception: return "$--"
-    if x >= 1_000_000: return f"${x/1_000_000:.1f}M"
-    if x >= 1_000: return f"${x/1_000:.1f}k"
-    return f"${x:.1f}"
+    if x >= 1_000_000: return f"${x/1_000_000:.2f}M"
+    if x >= 1_000: return f"${x/1_000:.2f}k"
+    return f"${x:.2f}"
 
 
 def parse_hhmm(s: str):
@@ -661,6 +712,54 @@ def build_row_surfaces_from_cache(tickers, market_cache, row_font, holdings_enab
     if not parts: parts=[row_render_text("Waiting... ", WHITE)]
     return parts, any_ok
 
+
+def build_portfolio_parts(market_cache: dict, holdings: dict, label: str = "MY") -> list:
+    """
+    Build portfolio summary surfaces to prepend to a ticker row.
+    Returns [label_surf, value_surf] e.g. 'MY:' in white + '$15.2k +1.23%  ' in green/red.
+    Returns [] if market data isn't loaded yet or no holdings have pricing.
+
+    label     — prefix shown before the colon (e.g. "MY", "TFSA", "RRSP").
+    Calculation: total_value = sum(shares * last_price) across all holdings with data.
+    Pct change  = (total_value - total_prev) / total_prev * 100, where
+                  total_prev = sum(shares * prev_close).
+    Holdings with no market data yet are skipped (partial total is shown).
+    """
+    if not holdings or not market_cache:
+        return []
+    total_value = 0.0
+    total_prev  = 0.0
+    any_ok = False
+    for sym, info in holdings.items():
+        try:
+            shares = float(info.get("shares", 0.0))
+        except Exception:
+            continue
+        if shares <= 0.0:
+            continue
+        entry = (market_cache or {}).get(sym) or {}
+        last = entry.get("last")
+        prev = entry.get("prev")
+        if last is None or prev is None:
+            continue
+        try:
+            last_f = float(last); prev_f = float(prev)
+        except Exception:
+            continue
+        if prev_f == 0.0:
+            continue
+        total_value += shares * last_f
+        total_prev  += shares * prev_f
+        any_ok = True
+    if not any_ok or total_prev == 0.0:
+        return []
+    pct = ((total_value - total_prev) / total_prev) * 100.0
+    col = GREEN if pct >= 0 else RED
+    label_srf = row_render_text(f"{label}:", WHITE)
+    value_srf = row_render_text(f"{fmt_value_currency_compact(total_value)} {pct:+.2f}%  ", col)
+    return [label_srf, value_srf]
+
+
 # Dimming - direct pixel manipulation
 
 def apply_dimming_inplace(frame_surf: pygame.Surface, scale: float):
@@ -675,9 +774,11 @@ def apply_dimming_inplace(frame_surf: pygame.Surface, scale: float):
 
 # ===== FULL-HEIGHT SCOREBOARD RENDERER =====
 
-def render_fullheight_scoreboard(frame, game_data, font_big, flash_home=False, flash_away=False, flash_color=(255,255,255)):
+def render_fullheight_scoreboard(frame, game_data, font_big, flash_home=False, flash_away=False, flash_color=(255,255,255), show_sog=False):
     """
     Render full-height 192x16 scoreboard with team logos and big scores.
+    When show_sog=True and SOG data is present (>0), the center zone switches to a
+    two-row microfont layout: period+clock on top, home_sog-away_sog on bottom.
     """
     W_local = frame.get_width()
     H_local = frame.get_height()
@@ -690,6 +791,9 @@ def render_fullheight_scoreboard(frame, game_data, font_big, flash_home=False, f
     clock = game_data.get("clock", "")
     period = game_data.get("period", "")
     league = game_data.get("league", "NHL")
+    home_sog = int(game_data.get("home_sog", 0) or 0)
+    away_sog = int(game_data.get("away_sog", 0) or 0)
+    sog_available = show_sog and (home_sog > 0 or away_sog > 0)
 
     # For 192x16 displays (full layout)
     if W_local >= 192:
@@ -707,21 +811,40 @@ def render_fullheight_scoreboard(frame, game_data, font_big, flash_home=False, f
         away_score_y = (H_local - away_score_text.get_height()) // 2
         frame.blit(home_score_text, (home_score_x, home_score_y))
         frame.blit(away_score_text, (away_score_x, away_score_y))
-        # Center area for clock/period
-        if clock:
-            clock_text = font_big.render(clock, True, (255, 255, 0))
-            clock_x = 48 + (96 - clock_text.get_width()) // 2
-            clock_y = 0
-            frame.blit(clock_text, (clock_x, clock_y))
-        if period:
-            try:
-                period_font = pygame.font.SysFont("monospace", 8, bold=True)
-                period_text = period_font.render(str(period), True, (180, 180, 180))
-                period_x = 48 + (96 - period_text.get_width()) // 2
-                period_y = H_local - period_text.get_height()
-                frame.blit(period_text, (period_x, period_y))
-            except Exception:
-                pass
+        # Center area (x=48-143, 96px wide)
+        if sog_available:
+            # Two-row microfont layout: period+clock on top (y=0), SOG on bottom (y=9)
+            per_surf = _glyph_surface_5x7(str(period), (180, 180, 180), row_h=7, spacing=1) if period else None
+            clk_surf = _glyph_surface_5x7(clock, (255, 255, 0), row_h=7, spacing=1) if clock else None
+            gap = 2
+            top_w = ((per_surf.get_width() if per_surf else 0)
+                     + (gap if (per_surf and clk_surf) else 0)
+                     + (clk_surf.get_width() if clk_surf else 0))
+            bx = 48 + max(0, (96 - top_w) // 2)
+            if per_surf:
+                frame.blit(per_surf, (bx, 0))
+                bx += per_surf.get_width() + (gap if clk_surf else 0)
+            if clk_surf:
+                frame.blit(clk_surf, (bx, 0))
+            sog_surf = _glyph_surface_5x7(f"{home_sog}-{away_sog}", (80, 200, 255), row_h=7, spacing=1)
+            sx = 48 + max(0, (96 - sog_surf.get_width()) // 2)
+            frame.blit(sog_surf, (sx, 9))
+        else:
+            # Standard layout: period (microfont) + clock (font_big), vertically centered
+            clk_surf = font_big.render(clock, True, (255, 255, 0)) if clock else None
+            per_surf = _glyph_surface_5x7(str(period), (180, 180, 180), H_local, spacing=1) if period else None
+            if clk_surf or per_surf:
+                gap = 3
+                total_w = ((per_surf.get_width() if per_surf else 0)
+                           + (gap if (per_surf and clk_surf) else 0)
+                           + (clk_surf.get_width() if clk_surf else 0))
+                bx = 48 + (96 - total_w) // 2
+                if per_surf:
+                    frame.blit(per_surf, (bx, 0))
+                    bx += per_surf.get_width() + (gap if clk_surf else 0)
+                if clk_surf:
+                    clk_y = (H_local - clk_surf.get_height()) // 2
+                    frame.blit(clk_surf, (bx, clk_y))
     else:
         score_color_home = flash_color if flash_home else (255, 255, 255)
         score_color_away = flash_color if flash_away else (255, 255, 255)
@@ -750,7 +873,6 @@ class ScoreboardFlashState:
         self.flash_next_ts = 0.0
     def start_flash(self, team: str, cycles: int = 4):
         """Start flashing for the specified team."""
-        import time
         self.flashing = True
         self.team = team
         self.cycles_left = cycles
@@ -758,7 +880,6 @@ class ScoreboardFlashState:
         self.flash_next_ts = time.time() + (self.flash_ms / 1000.0)
     def get_flash_color(self):
         """Get current flash color, advancing if needed."""
-        import time
         if not self.flashing:
             return None
         now = time.time()

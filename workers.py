@@ -176,6 +176,69 @@ def weather_worker(rss_url, include_watch, refresh_sec, timeout_s, force_active,
 
 
 
+def _es_nhl_has_game_today(teams: set) -> bool:
+    """Check ESPN NHL scoreboard for any game involving the given teams today."""
+    url = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"
+    try:
+        with urllib.request.urlopen(url, timeout=6.0) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+    except Exception:
+        return False
+    for ev in (data or {}).get("events", []):
+        comp = (ev.get("competitions") or [{}])[0]
+        comp_status = comp.get("status") or {}
+        status_type = comp_status.get("type") or {}
+        if (status_type.get("state") or "").lower() == "post":
+            continue  # Game already finished — don't count it for the blue dot
+        for c in (comp.get("competitors") or []):
+            abbrev = ((c.get("team") or {}).get("abbreviation") or "").upper()
+            if abbrev in teams:
+                return True
+    return False
+
+
+def _es_nhl_fetch_now():
+    """Fetch ESPN NHL scoreboard and normalize to the same game dict format as _nhl_fetch_now_via_apiweb."""
+    url = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"
+    try:
+        with urllib.request.urlopen(url, timeout=6.0) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+    except Exception:
+        return []
+    out = []
+    for ev in (data or {}).get("events", []):
+        comp = (ev.get("competitions") or [{}])[0]
+        comp_status = comp.get("status") or {}
+        status = comp_status.get("type") or {}      # state/period live in status.type
+        state = (status.get("state") or "").lower()
+        mapped = {"pre": "PREGAME", "in": "LIVE", "post": "FINAL"}.get(state, state.upper() or "FUT")
+        period = int(status.get("period") or comp_status.get("period") or 0)
+        clock = comp_status.get("displayClock") or status.get("displayClock") or ""  # displayClock is at status level, not status.type
+        if period > 3:
+            period_label = "OT"
+        elif period > 0:
+            period_label = f"P{period}"
+        else:
+            period_label = ""
+        compet = comp.get("competitors") or []
+        home = next((c for c in compet if c.get("homeAway") == "home"), None)
+        away = next((c for c in compet if c.get("homeAway") == "away"), None)
+        if not home or not away:
+            continue
+        hteam = home.get("team") or {}
+        ateam = away.get("team") or {}
+        out.append({
+            "league": "NHL", "state": mapped, "period": period, "clock": clock,
+            "period_label": period_label,
+            "home": {"code": (hteam.get("abbreviation") or "").upper(), "score": int(home.get("score") or 0), "sog": 0},
+            "away": {"code": (ateam.get("abbreviation") or "").upper(), "score": int(away.get("score") or 0), "sog": 0},
+            "possession": None,
+            "id": str(ev.get("id") or comp.get("id") or ""),
+            "start_ts": ev.get("date") or None
+        })
+    return out
+
+
 def _es_nfl_fetch_now():
     """Fetch ESPN NFL scoreboard (public JSON) and normalize."""
     url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
@@ -378,6 +441,7 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
         try:
             now = time.time()
             payloads = []
+            game_today = False  # True if any watched team has a game today
 
             if test_mode and (test_until is None or now <= test_until):
                 elapsed = int(now % 600)
@@ -412,6 +476,8 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
                     nfl_all = _filter_postgame_games(nfl_all, {"FINAL"}, 3, SCOREBOARD_POSTGAME_DELAY_MIN)
 
                     wanted = set([t for t in nfl_teams if t])
+                    if any(_team_in_list(g, wanted) for g in nfl_all):
+                        game_today = True
                     live_mine = [g for g in nfl_all if g["state"] == "LIVE" and _team_in_list(g, wanted)]
                     live_others = [g for g in nfl_all if g["state"] == "LIVE" and not _team_in_list(g, wanted)]
                     pre_mine = _apply_pregame_window(
@@ -437,9 +503,18 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
                             error_msg += f" & NHL failed: {str(e)[:30]}"
                         fetch_status = "error"
 
+                    # If NHL API returned nothing, fall back to ESPN NHL scoreboard for all game data
+                    if not nhl_now:
+                        nhl_now = _es_nhl_fetch_now()
+
                     nhl_now = _filter_postgame_games(nhl_now, {"FINAL", "OFF"}, 2.5, SCOREBOARD_POSTGAME_DELAY_MIN)
 
                     wanted = set([t for t in nhl_teams if t])
+                    if any(_team_in_list(g, wanted) for g in nhl_now):
+                        game_today = True
+                    elif not game_today:
+                        # Both APIs empty — last resort check via ESPN
+                        game_today = _es_nhl_has_game_today(wanted)
                     live_mine = [g for g in nhl_now if g["state"] == "LIVE" and _team_in_list(g, wanted)]
                     live_others = [g for g in nhl_now if g["state"] == "LIVE" and not _team_in_list(g, wanted)]
 
@@ -486,6 +561,12 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
                 except Exception as e:
                     print(f"[SB] Queue put failed: {e}", flush=True)
 
+            # Always broadcast game-today flag for dot color (independent of pregame window)
+            try:
+                put_latest(out_q, {"type":"scoreboard_status","payload":{"game_today":game_today,"ts":now}})
+            except Exception as e:
+                print(f"[SB] Status put failed: {e}", flush=True)
+
             # Update status file
             total_games = sum(len(p.get("games", [])) for p in payloads)
             live_games = sum(sum(1 for g in p.get("games", []) if g.get("state") == "LIVE") for p in payloads)
@@ -505,6 +586,7 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
                     "live_games": live_games,
                     "pregame_games": pregame_games,
                     "leagues_with_games": leagues_with_games,
+                    "game_today": game_today,
                     "test_mode": test_mode,
                     "error_message": error_msg,
                     "last_update": time.strftime("%Y-%m-%d %H:%M:%S")
@@ -512,5 +594,6 @@ def scoreboard_worker(leagues, nhl_teams, nfl_teams, window_min, pre_cadence, li
 
             time.sleep(max(3, cadence))
 
-        except Exception:
+        except Exception as e:
+            print(f"[SB] Worker cycle error: {e}", flush=True)
             time.sleep(pre_cadence)

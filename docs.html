@@ -171,7 +171,7 @@
 
     <!-- OVERVIEW -->
     <h2 id="overview">Overview</h2>
-    <p>The LED Ticker is a multi-process Python application running on Raspberry Pi that drives a 192x16 HUB75 LED matrix panel (or HDMI window). It displays real-time stock market data, live NHL/NFL scores, Environment Canada weather alerts, and time displays in a continuously scrolling format.</p>
+    <p>The LED Ticker is a multi-process Python application running on Raspberry Pi that drives a 192x16 HUB75 LED matrix panel. It displays real-time stock market data, live NHL/NFL scores, Environment Canada weather alerts, and time displays in a continuously scrolling format.</p>
     <p><strong>Web UI:</strong> <code>http://[pi-ip]:5080</code> &mdash; All configuration is done here. Changes save to <code>config.json</code> and hot-reload into the ticker within ~1 second.</p>
 
     <div class="callout tip">
@@ -212,7 +212,7 @@ config.json   → all settings (hot-reloaded on change)</pre>
       <li><span class="dot green"></span><strong>Green</strong> &mdash; Market open (NYSE regular session), data fresh</li>
       <li><span class="dot grey"></span><strong>Grey</strong> &mdash; Market closed, data is recent</li>
       <li><span class="dot yellow"></span><strong>Yellow</strong> &mdash; Pre-market (before 9:30 AM ET on weekdays)</li>
-      <li><span class="dot blue"></span><strong>Blue</strong> &mdash; Your tracked team has a game today</li>
+      <li><span class="dot blue"></span><strong>Blue</strong> &mdash; Your tracked team has a game scheduled today (shown all day from first worker poll)</li>
       <li><span class="dot red"></span><strong>Red</strong> &mdash; Data stale (&gt;FRESH_SEC old) or no data</li>
     </ul>
 
@@ -227,12 +227,17 @@ QQQ=30.5
 VFV.TO=100
 XEQT.TO=1.2431</pre>
 
+    <h4>Portfolio Total Display</h4>
+    <p>When <code>PORTFOLIO_DISPLAY_ENABLED</code> is true, the ticker prepends a live portfolio summary to the <strong>top row</strong> (and single-row mode). It shows your total portfolio value and dollar-weighted percent change since the previous close:</p>
+    <pre>MY: $42.1k +0.87%</pre>
+    <p>The percentage is colored <strong class="green-text">green</strong> for gains and <strong class="red-text">red</strong> for losses, matching the normal ticker color scheme. Only symbols that have both current price and previous close data contribute to the total — symbols not yet fetched are skipped gracefully. This setting is independent of <code>HOLDINGS_ENABLED</code> (per-ticker value view).</p>
+
     <h3 id="preroll">Time Preroll</h3>
     <p>At the top of every hour, the ticker briefly shows the current time in large centered format. This also fires for market open (9:30 AM ET) and market close (4:00 PM ET) with a scrolling announcement.</p>
     <table class="cfg-table">
       <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
       <tr><td class="cfg-key">TIME_PREROLL_ENABLED</td><td class="cfg-default">true</td><td class="cfg-desc">Enable/disable preroll entirely</td></tr>
-      <tr><td class="cfg-key">TIME_PREROLL_SEC</td><td class="cfg-default">15</td><td class="cfg-desc">Duration in seconds</td></tr>
+      <tr><td class="cfg-key">TIME_PREROLL_SEC</td><td class="cfg-default">10</td><td class="cfg-desc">Duration in seconds</td></tr>
       <tr><td class="cfg-key">PREROLL_STYLE</td><td class="cfg-default">BIGTIME</td><td class="cfg-desc">BIGTIME (static), MARQUEE (scrolling), NONE</td></tr>
       <tr><td class="cfg-key">PREROLL_COLOR</td><td class="cfg-default">yellow</td><td class="cfg-desc">white / yellow / green / red / blue / magenta / cyan</td></tr>
       <tr><td class="cfg-key">PREROLL_PPS</td><td class="cfg-default">40.0</td><td class="cfg-desc">Pixels/second for MARQUEE style</td></tr>
@@ -241,15 +246,16 @@ XEQT.TO=1.2431</pre>
     <p>Additionally, a periodic market status announcement is injected into the ticker every 5 minutes (e.g., market open/closed status). This appears in the top row in dual mode or in the single row in single mode.</p>
 
     <h3 id="scoreboard">Live Scoreboard</h3>
-    <p>When a tracked team has a live game, the ticker automatically switches to a full-height scoreboard showing team abbreviations in team colors, scores, period, and game clock. Goals trigger a red/white/blue flash animation and a score alert scrolls across the display.</p>
+    <p>When a tracked team has a live game, the ticker automatically switches to a full-height scoreboard showing team abbreviations in team colors, scores, period, and game clock. Goals trigger a red/white/blue flash animation and a score alert flashes the team name and score centered on the display.</p>
+    <p>The status dot turns <strong>blue</strong> all day as soon as the first worker poll detects a game scheduled for today — no need to wait for game time. The scoreboard activates <code>SCOREBOARD_PREGAME_WINDOW_MIN</code> minutes before puck drop and remains active for <code>SCOREBOARD_POSTGAME_DELAY_MIN</code> minutes after the final buzzer.</p>
+    <p><strong>Pregame Countdown Announcements</strong> (enable with <code>SCOREBOARD_SHOW_COUNTDOWN: true</code>): Starting <code>SCOREBOARD_PREGAME_WINDOW_MIN</code> minutes before game time, the top ticker row periodically injects a cyan announcement such as <em>*** MTL vs TOR starting in 25m ***</em> every <code>SCOREBOARD_PREGAME_ANNOUNCE_EVERY</code> scrolls. Weather alerts, market open/close notices, and market announcements still take priority over the pregame announce in that slot. At <code>SCOREBOARD_LIVE_TRIGGER_MIN</code> minutes before game time the display automatically flips into full scoreboard mode showing the matchup at 0–0 with a <em>PRE</em> period label and countdown clock — seamlessly transitioning to a live scoreboard the moment the game begins.</p>
     <h4>Supported Leagues</h4>
     <ul>
-      <li><strong>NHL</strong> &mdash; via api-web.nhle.com</li>
+      <li><strong>NHL</strong> &mdash; via api-web.nhle.com (falls back to ESPN API if unreachable)</li>
       <li><strong>NFL</strong> &mdash; via ESPN API</li>
     </ul>
-    <h4>Scoreboard Display Modes</h4>
+    <h4>Scoreboard Display Mode</h4>
     <p><strong>Full-Height (192x16):</strong> 3-letter team abbreviation in team color on each side (32px), large score in center, clock and period. Score flash animation on goal.</p>
-    <p><strong>Compact (in ticker rows):</strong> <code>MTL 3 - TOR 2 (P3 5:42)</code> on top row (dual) or single row, SOG or possession on bottom row (dual only).</p>
     <h4>Key Settings</h4>
     <pre>"SCOREBOARD_ENABLED": true,
 "SCOREBOARD_LEAGUES": ["NHL","NFL"],
@@ -314,13 +320,11 @@ XEQT.TO=1.2431</pre>
     <h3 id="cfg-display">Display &amp; Layout</h3>
     <table class="cfg-table">
       <tr><th>Key</th><th>Default</th><th>Description</th></tr>
-      <tr><td class="cfg-key">OUTPUT_MODE</td><td class="cfg-default">RGBMATRIX</td><td class="cfg-desc">RGBMATRIX for LED panel, HDMI for window preview</td></tr>
       <tr><td class="cfg-key">MODEL_NAME</td><td class="cfg-default">Matrix192x16</td><td class="cfg-desc">Panel model preset for auto W/H</td></tr>
       <tr><td class="cfg-key">W</td><td class="cfg-default">192</td><td class="cfg-desc">Panel width in pixels (0 = auto from MODEL_NAME)</td></tr>
       <tr><td class="cfg-key">H</td><td class="cfg-default">16</td><td class="cfg-desc">Panel height in pixels (0 = auto)</td></tr>
       <tr><td class="cfg-key">LAYOUT</td><td class="cfg-default">dual</td><td class="cfg-desc">dual (two 8px rows) or single (one 16px row). Both modes support all features: weather alerts, market announcements, score alerts, preroll, and messages</td></tr>
       <tr><td class="cfg-key">FPS</td><td class="cfg-default">30</td><td class="cfg-desc">Render loop frames per second</td></tr>
-      <tr><td class="cfg-key">TICKER_SCALE</td><td class="cfg-default">8</td><td class="cfg-desc">Scale multiplier for HDMI preview window</td></tr>
       <tr><td class="cfg-key">TICKER_TZ</td><td class="cfg-default">America/Montreal</td><td class="cfg-desc">Timezone for clock, preroll, and market hours</td></tr>
       <tr><td class="cfg-key">MICROFONT_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Use 5x7 pixel font in dual layout (very tiny)</td></tr>
       <tr><td class="cfg-key">DEBUG_OVERLAY</td><td class="cfg-default">false</td><td class="cfg-desc">Show FPS, state, dim% overlay on bottom row</td></tr>
@@ -342,6 +346,7 @@ XEQT.TO=1.2431</pre>
       <tr><td class="cfg-key">TICKERS_BOT</td><td class="cfg-default">[]</td><td class="cfg-desc">Bottom row tickers: list of [SYMBOL, LABEL] pairs</td></tr>
       <tr><td class="cfg-key">TICKERS_BOT2</td><td class="cfg-default">[]</td><td class="cfg-desc">Alternate bottom row tickers shown every other scroll. Leave empty to disable alternating. Holdings apply when HOLDINGS_ENABLED is true.</td></tr>
       <tr><td class="cfg-key">HOLDINGS_ENABLED</td><td class="cfg-default">true</td><td class="cfg-desc">Show portfolio value instead of price when enabled</td></tr>
+      <tr><td class="cfg-key">PORTFOLIO_DISPLAY_ENABLED</td><td class="cfg-default">false</td><td class="cfg-desc">Prepend total portfolio value and % change to the top row: <code>MY: $42.1k +0.87%</code> in green/red</td></tr>
       <tr><td class="cfg-key">HOLDINGS</td><td class="cfg-default">{}</td><td class="cfg-desc">Dict of {SYMBOL: {shares: N}} for portfolio tracking</td></tr>
       <tr><td class="cfg-key">REFRESH_SEC</td><td class="cfg-default">240</td><td class="cfg-desc">Market data refresh interval in seconds</td></tr>
       <tr><td class="cfg-key">FRESH_SEC</td><td class="cfg-default">300</td><td class="cfg-desc">Seconds before data is considered stale (dot goes red)</td></tr>
@@ -372,11 +377,16 @@ XEQT.TO=1.2431</pre>
       <tr><td class="cfg-key">SCOREBOARD_NFL_TEAMS</td><td class="cfg-default">[]</td><td class="cfg-desc">NFL team codes to track</td></tr>
       <tr><td class="cfg-key">SCOREBOARD_PRECEDENCE</td><td class="cfg-default">auto</td><td class="cfg-desc">auto = scoreboard when live; force = always show if game active</td></tr>
       <tr><td class="cfg-key">SCOREBOARD_ONLY_MY_TEAMS</td><td class="cfg-default">true</td><td class="cfg-desc">Only show games with your tracked teams</td></tr>
-      <tr><td class="cfg-key">SCOREBOARD_SHOW_COUNTDOWN</td><td class="cfg-default">true</td><td class="cfg-desc">Show pregame countdown timer</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_PREGAME_WINDOW_MIN</td><td class="cfg-default">30</td><td class="cfg-desc">Minutes before game start to begin polling pregame data and show countdown announcements</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_POSTGAME_DELAY_MIN</td><td class="cfg-default">5</td><td class="cfg-desc">Minutes after FINAL to keep scoreboard showing</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_SHOW_COUNTDOWN</td><td class="cfg-default">false</td><td class="cfg-desc">Enable pregame countdown feature: injects game announcements on the top ticker row and flips into scoreboard mode at T-minus SCOREBOARD_LIVE_TRIGGER_MIN minutes</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_PREGAME_ANNOUNCE_EVERY</td><td class="cfg-default">5</td><td class="cfg-desc">When countdown is enabled, inject the pregame announcement every N top-row scroll completions</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_PREGAME_ANNOUNCE_COLOR</td><td class="cfg-default">cyan</td><td class="cfg-desc">Color of the pregame announcement text (e.g. cyan, yellow, white)</td></tr>
+      <tr><td class="cfg-key">SCOREBOARD_LIVE_TRIGGER_MIN</td><td class="cfg-default">5</td><td class="cfg-desc">Minutes before game start to automatically flip into full scoreboard mode (shows 0–0 / PRE until game goes live)</td></tr>
       <tr><td class="cfg-key">SCOREBOARD_SHOW_CLOCK</td><td class="cfg-default">true</td><td class="cfg-desc">Show game clock in scoreboard</td></tr>
       <tr><td class="cfg-key">SCOREBOARD_SHOW_SOG</td><td class="cfg-default">true</td><td class="cfg-desc">Show shots on goal on bottom row (NHL)</td></tr>
       <tr><td class="cfg-key">SCOREBOARD_HOME_FIRST</td><td class="cfg-default">true</td><td class="cfg-desc">Show home team on left</td></tr>
-      <tr><td class="cfg-key">SCORE_ALERTS_ENABLED</td><td class="cfg-default">true</td><td class="cfg-desc">Enable goal/touchdown scroll alerts</td></tr>
+      <tr><td class="cfg-key">SCORE_ALERTS_ENABLED</td><td class="cfg-default">true</td><td class="cfg-desc">Enable goal/touchdown flash alerts</td></tr>
       <tr><td class="cfg-key">SCORE_ALERTS_NHL</td><td class="cfg-default">true</td><td class="cfg-desc">Fire alerts for NHL goals</td></tr>
       <tr><td class="cfg-key">SCORE_ALERTS_NFL</td><td class="cfg-default">true</td><td class="cfg-desc">Fire alerts for NFL touchdowns</td></tr>
       <tr><td class="cfg-key">SCORE_ALERTS_MY_TEAMS_ONLY</td><td class="cfg-default">true</td><td class="cfg-desc">Only alert for tracked team scores</td></tr>
@@ -433,7 +443,7 @@ XEQT.TO=1.2431</pre>
       <li><strong>Message config</strong> &rarr; Message surface rebuilt immediately</li>
       <li><strong>Layout changes</strong> &rarr; Scroll positions reset</li>
     </ul>
-    <div class="callout warn">Layout and output mode changes (W, H, LAYOUT, OUTPUT_MODE) may require a full service restart to take full effect.</div>
+    <div class="callout warn">Layout changes (W, H, LAYOUT) may require a full service restart to take full effect.</div>
 
     <h3 id="adding-tickers">Adding / Removing Tickers</h3>
     <p>In the web UI under <strong>Tickers (Top/Bottom)</strong>, enter one SYMBOL per line followed by its LABEL on the next line:</p>
@@ -480,8 +490,7 @@ Apple</pre>
       <span class="marker goal">[GOAL FLASH]</span> Flash animation triggered on scoring<br>
       <span class="marker weather">[WEATHER]</span> Weather alert status change<br>
       <span class="marker sb">[SB-RX]</span> Scoreboard data received from worker<br>
-      <span class="marker rgb">[RGB Matrix]</span> LED matrix init / write status<br>
-      <span class="marker cfg">[MAIN]</span> Periodic loop status (every 300 frames)
+      <span class="marker rgb">[RGB Matrix]</span> LED matrix init / write status
     </div>
 
     <!-- REST API REFERENCE -->
@@ -588,7 +597,6 @@ Apple</pre>
     <ol>
       <li>Check service: <code>systemctl status led-ticker</code></li>
       <li>Check logs: <code>sudo journalctl -u led-ticker -n 50</code></li>
-      <li>Verify <code>OUTPUT_MODE</code> is <code>RGBMATRIX</code></li>
       <li>Check GPIO/HUB75 cable connections</li>
       <li>Must run as root: <code>sudo python ticker.py</code></li>
     </ol>
@@ -648,7 +656,6 @@ Apple</pre>
     <h4>High CPU usage</h4>
     <ul>
       <li>Reduce FPS to 30</li>
-      <li>Ensure <code>USE_BUSY_LOOP</code> is false</li>
       <li>Check for worker crash loops in logs</li>
     </ul>
     <h4>Config changes not applying</h4>

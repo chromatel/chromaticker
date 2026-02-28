@@ -53,8 +53,10 @@ from rendering import (
     get_preroll_big_font, get_maint_big_font,
     row_render_text, build_time_surface, build_announcement_surface,
     build_weather_alert_surface, build_message_surface, build_clock_surface,
-    build_row_surfaces_from_cache, apply_dimming_inplace,
-    render_fullheight_scoreboard, ScoreboardFlashState
+    build_preroll_bigtime_surface,
+    build_row_surfaces_from_cache, build_portfolio_parts, apply_dimming_inplace,
+    render_fullheight_scoreboard, ScoreboardFlashState,
+    clear_team_logo_cache
 )
 
 
@@ -104,7 +106,7 @@ MODEL_NAME = os.environ.get("FPP_MODEL_NAME", "Matrix192x16")  # FPP model name;
 # DEPRECATED: SHM mode no longer supported - using RGB Matrix directly
 W = int(os.environ.get("TICKER_W", "0") or 0)  # Override panel width; 0 = auto by MODEL_NAME.
 H = int(os.environ.get("TICKER_H", "0") or 0)  # Override panel height; 0 = auto by MODEL_NAME.
-LAYOUT = (os.environ.get("TICKER_LAYOUT", "") or "").lower()  # "single" or "dual"; empty="" = auto (H>=16 => dual else single).
+# Layout is always dual (two 8px rows). Single-row mode removed.
 
 # --------------------------------------------------------------------------------
 # TIMEZONE
@@ -120,8 +122,6 @@ try: PPS_TOP = float(os.environ.get("PPS_TOP", "40") or 40)
 except: PPS_TOP = 40.0
 try: PPS_BOT = float(os.environ.get("PPS_BOT", "40") or 40)
 except: PPS_BOT = 40.0
-try: PPS_SINGLE = float(os.environ.get("PPS_SINGLE", "40") or 40)
-except: PPS_SINGLE = 40.0
 try: REFRESH_SEC = max(10, int(os.environ.get("REFRESH_SEC", "120") or 120))
 except: REFRESH_SEC = 120
 try: FRESH_SEC = max(1, int(os.environ.get("FRESH_SEC", "180") or 180))
@@ -179,10 +179,20 @@ try: WEATHER_WARNING_EVERY_N_SCROLLS = int(os.environ.get("WEATHER_WARNING_EVERY
 except: WEATHER_WARNING_EVERY_N_SCROLLS = 5
 WEATHER_WARNING_COLOR = (os.environ.get("WEATHER_WARNING_COLOR", "red") or "red").lower()
 
-# ADVISORY/WATCH (yellow): Top line only, yellow color, show every N scrolls  
+# ADVISORY/WATCH (yellow): show every N scrolls
 try: WEATHER_ADVISORY_EVERY_N_SCROLLS = int(os.environ.get("WEATHER_ADVISORY_EVERY_N_SCROLLS", "10") or 10)
 except: WEATHER_ADVISORY_EVERY_N_SCROLLS = 10
 WEATHER_ADVISORY_COLOR = (os.environ.get("WEATHER_ADVISORY_COLOR", "yellow") or "yellow").lower()
+
+# STATEMENT (special weather statement): own color and scroll frequency
+try: WEATHER_STATEMENT_EVERY_N_SCROLLS = int(os.environ.get("WEATHER_STATEMENT_EVERY_N_SCROLLS", "15") or 15)
+except: WEATHER_STATEMENT_EVERY_N_SCROLLS = 15
+WEATHER_STATEMENT_COLOR = (os.environ.get("WEATHER_STATEMENT_COLOR", "cyan") or "cyan").lower()
+
+# TOP-OF-HOUR WEATHER PREROLL: show active alert full-screen after clock preroll
+WEATHER_PREROLL_ENABLED = os.environ.get("WEATHER_PREROLL_ENABLED", "1") == "1"
+try: WEATHER_PREROLL_SEC = int(os.environ.get("WEATHER_PREROLL_SEC", "8") or 8)
+except: WEATHER_PREROLL_SEC = 8
 
 # Test harness: if >0, after WEATHER_TEST_DELAY seconds, force an artificial active alert
 # that remains logically "active" for this many seconds (0 = one-shot).
@@ -194,7 +204,10 @@ except: WEATHER_TEST_STICKY_TOTAL = 60
 # --------------------------------------------------------------------------------
 SCOREBOARD_PREGAME_WINDOW_MIN = int(os.environ.get("SCOREBOARD_PREGAME_WINDOW_MIN", "30"))  # Show scoreboard N min before game starts
 SCOREBOARD_POSTGAME_DELAY_MIN = int(os.environ.get("SCOREBOARD_POSTGAME_DELAY_MIN", "5"))   # Keep showing scoreboard N min after FINAL
-SCOREBOARD_SHOW_COUNTDOWN = os.environ.get("SCOREBOARD_SHOW_COUNTDOWN", "1") == "1"          # Show "GAME STARTS IN Xm" for pregame
+SCOREBOARD_SHOW_COUNTDOWN        = os.environ.get("SCOREBOARD_SHOW_COUNTDOWN", "0") == "1"  # Enable pregame countdown announces + T-N scoreboard flip
+SCOREBOARD_PREGAME_ANNOUNCE_EVERY = max(1, int(os.environ.get("SCOREBOARD_PREGAME_ANNOUNCE_EVERY", "5") or 5))   # Inject every N top-row scroll completions
+SCOREBOARD_PREGAME_ANNOUNCE_COLOR = (os.environ.get("SCOREBOARD_PREGAME_ANNOUNCE_COLOR", "cyan") or "cyan").lower()  # Color for announce text
+SCOREBOARD_LIVE_TRIGGER_MIN       = max(1, int(os.environ.get("SCOREBOARD_LIVE_TRIGGER_MIN", "5") or 5))         # Minutes before start to flip into scoreboard mode
 
 # --------------------------------------------------------------------------------
 # MESSAGE INJECTOR
@@ -249,8 +262,6 @@ SCOREBOARD_POLL_WINDOW_MIN = int(os.environ.get("SCOREBOARD_POLL_WINDOW_MIN", "1
 SCOREBOARD_POLL_CADENCE    = int(os.environ.get("SCOREBOARD_POLL_CADENCE", "60") or 60)
 SCOREBOARD_LIVE_REFRESH    = int(os.environ.get("SCOREBOARD_LIVE_REFRESH", "45") or 45)
 SCOREBOARD_PRECEDENCE      = (os.environ.get("SCOREBOARD_PRECEDENCE", "normal") or "normal").lower()
-SCOREBOARD_LAYOUT          = (os.environ.get("SCOREBOARD_LAYOUT", "auto") or "auto").lower()
-SCOREBOARD_UPPERCASE       = os.environ.get("SCOREBOARD_UPPERCASE", "1") == "1"
 SCOREBOARD_HOME_FIRST      = os.environ.get("SCOREBOARD_HOME_FIRST", "1") == "1"
 SCOREBOARD_SHOW_CLOCK      = os.environ.get("SCOREBOARD_SHOW_CLOCK", "1") == "1"
 SCOREBOARD_SHOW_SOG        = os.environ.get("SCOREBOARD_SHOW_SOG", "1") == "1"
@@ -258,10 +269,6 @@ SCOREBOARD_SHOW_POSSESSION = os.environ.get("SCOREBOARD_SHOW_POSSESSION", "1") =
 SCOREBOARD_INCLUDE_OTHERS  = os.environ.get("SCOREBOARD_INCLUDE_OTHERS", "0") == "1"
 SCOREBOARD_ONLY_MY_TEAMS   = os.environ.get("SCOREBOARD_ONLY_MY_TEAMS", "1") == "1"
 SCOREBOARD_MAX_GAMES       = max(1, int(os.environ.get("SCOREBOARD_MAX_GAMES", "2") or 2))
-SCOREBOARD_SCROLL_ENABLED  = os.environ.get("SCOREBOARD_SCROLL_ENABLED", "0") == "1"
-try: SCOREBOARD_STATIC_DWELL_SEC = int(os.environ.get("SCOREBOARD_STATIC_DWELL_SEC", "4") or 4)
-except Exception: SCOREBOARD_STATIC_DWELL_SEC = 4
-SCOREBOARD_STATIC_ALIGN = (os.environ.get("SCOREBOARD_STATIC_ALIGN", "left") or "left").lower()
 
 # --------------------------------------------------------------------------------
 # SCOREBOARD TEST HARNESS
@@ -275,13 +282,18 @@ SCOREBOARD_TEST_DURATION= int(os.environ.get("SCOREBOARD_TEST_DURATION", "0") or
 # --------------------------------------------------------------------------------
 # OVERRIDES (temporary modes)
 # --------------------------------------------------------------------------------
-OVERRIDE_MODE = (os.environ.get("OVERRIDE_MODE", "OFF") or "OFF").upper()  # "OFF","BRIGHT","SCOREBOARD","MESSAGE","MAINT","CLOCK"
+OVERRIDE_MODE = (os.environ.get("OVERRIDE_MODE", "OFF") or "OFF").upper()  # "OFF","BRIGHT","SCOREBOARD","MESSAGE","MAINT","CLOCK","LOGO"
 try: OVERRIDE_DURATION_MIN = int(os.environ.get("OVERRIDE_DURATION_MIN", "0") or 0)
 except: OVERRIDE_DURATION_MIN = 0
 OVERRIDE_MESSAGE_TEXT = (os.environ.get("OVERRIDE_MESSAGE_TEXT", "") or "").strip()
+LOGO_PATH   = (os.environ.get("LOGO_PATH", "logo.png") or "logo.png").strip()
+LOGO_PPS    = float(os.environ.get("LOGO_PPS",  "30.0") or 30.0)
+LOGO_SCROLL = os.environ.get("LOGO_SCROLL", "1") == "1"  # True=scroll, False=centered static
+OVERRIDE_MESSAGE_SCROLL = os.environ.get("OVERRIDE_MESSAGE_SCROLL", "1") == "1"  # True=scroll, False=centered static
+OVERRIDE_MESSAGE_COLOR  = (os.environ.get("OVERRIDE_MESSAGE_COLOR", "yellow") or "yellow").strip()
 
 # --------------------------------------------------------------------------------
-# SCORE ALERTS (flashing scroll)
+# SCORE ALERTS (centered flash)
 # --------------------------------------------------------------------------------
 SCORE_ALERTS_ENABLED      = os.environ.get("SCORE_ALERTS_ENABLED", "1") == "1"
 SCORE_ALERTS_NHL          = os.environ.get("SCORE_ALERTS_NHL", "1") == "1"
@@ -331,6 +343,19 @@ TICKERS_BOT = [
 TICKERS_BOT2 = []  # Alternate bottom row (shown every other scroll); empty = no alternating
 HOLDINGS_ENABLED = False
 HOLDINGS = {}  # {"SYM": {"shares": float}, ...}
+PORTFOLIO_DISPLAY_ENABLED = False  # Show portfolio total at the start of the top row
+PORTFOLIO_LABEL = (os.environ.get("PORTFOLIO_LABEL", "MY") or "MY").strip().upper()
+
+# Bottom-row portfolio group summaries: each prepends a labelled total to its alternating row.
+# BOT_GROUP1 → bot_parts  (TICKERS_BOT, even completed_bot)
+# BOT_GROUP2 → bot_parts2 (TICKERS_BOT2, odd completed_bot)
+# Membership is derived automatically: symbols from the respective display row that also exist
+# in HOLDINGS.  Add a ticker to the row + HOLDINGS and it's automatically counted — no third list.
+BOT_GROUP1_LABEL   = (os.environ.get("BOT_GROUP1_LABEL", "TFSA") or "TFSA").strip().upper()
+BOT_GROUP1_ENABLED = os.environ.get("BOT_GROUP1_ENABLED", "0") == "1"
+
+BOT_GROUP2_LABEL   = (os.environ.get("BOT_GROUP2_LABEL", "RRSP") or "RRSP").strip().upper()
+BOT_GROUP2_ENABLED = os.environ.get("BOT_GROUP2_ENABLED", "0") == "1"
 
 # Default weathers have a sticky time in seconds (show for X seconds after active).
 try: WEATHER_STICKY_SEC = int(os.environ.get("WEATHER_STICKY_SEC", "12") or 12)
@@ -370,8 +395,8 @@ def _resolve_panel_size():
             W, H = 96, 16
 
 _resolve_panel_size()
-IS_SINGLE = False
-IS_DUAL   = False
+IS_DUAL   = True   # Always dual (two 8px rows); single-row mode removed
+IS_SINGLE = False  # Single-row mode removed; kept for reference guards
 ROW_H, TOP_Y, BOT_Y = H, 0, 0  # Will be recomputed in _recompute_layout_globals
 
 TZINFO = _resolve_tz()
@@ -428,22 +453,15 @@ def _atomic_load_json(path: str) -> dict:
         return {}
 
 def _recompute_layout_globals():
-    """Recompute layout flags and row geometry after W/H/LAYOUT changes."""
-    global W, H, LAYOUT, IS_SINGLE, IS_DUAL, ROW_H, TOP_Y, BOT_Y
+    """Recompute row geometry after W/H changes. Always dual layout."""
+    global W, H, ROW_H, TOP_Y, BOT_Y
     _resolve_panel_size()
-    if not LAYOUT:
-        LAYOUT = "dual" if H >= 16 else "single"
-    IS_SINGLE = (LAYOUT == "single")
-    IS_DUAL   = (LAYOUT == "dual")
-    if IS_DUAL:
-        ROW_H = H // 2; TOP_Y = 0; BOT_Y = ROW_H
-    else:
-        ROW_H = H; TOP_Y = 0; BOT_Y = 0
+    ROW_H = H // 2; TOP_Y = 0; BOT_Y = ROW_H
 
 def _apply_config(cfg: dict) -> dict:
     """Apply config.json into globals and set 'changed' flags per category."""
     g = globals()
-    changed = {"any": False, "layout": False, "dim": False, "markets": False, "scoreboard": False, "override": False, "weather": False, "message": False}
+    changed = {"any": False, "layout": False, "dim": False, "markets": False, "scoreboard": False, "override": False, "weather": False, "message": False, "portfolio": False}
     def set_if(key):
         if key not in cfg: return
         old = g.get(key, None); new = cfg[key]
@@ -459,8 +477,17 @@ def _apply_config(cfg: dict) -> dict:
             if key in ("MODEL_NAME","W","H","LAYOUT"): changed["layout"]=True
             if key.startswith("NIGHT_MODE") or key == "QUICK_DIM_PCT": changed["dim"]=True
             if key in ("TICKERS_TOP","TICKERS_BOT","TICKERS_BOT2","HOLDINGS","HOLDINGS_ENABLED"): changed["markets"]=True
-            if key.startswith("SCOREBOARD_"): changed["scoreboard"]=True
+            if key in ("PORTFOLIO_DISPLAY_ENABLED","PORTFOLIO_LABEL","BOT_GROUP1_LABEL","BOT_GROUP1_ENABLED","BOT_GROUP2_LABEL","BOT_GROUP2_ENABLED"): changed["portfolio"]=True
+            # Display-only SCOREBOARD_ keys don't require a worker restart (worker doesn't use them)
+            _sb_display_only = {
+                "SCOREBOARD_SHOW_SOG", "SCOREBOARD_SHOW_CLOCK", "SCOREBOARD_SHOW_POSSESSION",
+                "SCOREBOARD_HOME_FIRST", "SCOREBOARD_PRECEDENCE", "SCOREBOARD_SHOW_COUNTDOWN",
+                "SCOREBOARD_PREGAME_ANNOUNCE_EVERY", "SCOREBOARD_PREGAME_ANNOUNCE_COLOR",
+                "SCOREBOARD_LIVE_TRIGGER_MIN",
+            }
+            if key.startswith("SCOREBOARD_") and key not in _sb_display_only: changed["scoreboard"]=True
             if key.startswith("OVERRIDE_"):   changed["override"]=True
+            if key in ("LOGO_PATH", "LOGO_PPS", "LOGO_SCROLL", "OVERRIDE_MESSAGE_SCROLL"): changed["override"]=True
             if key.startswith("WEATHER_"):    changed["weather"]=True
             if key in ("INJECT_MESSAGE","MESSAGE_EVERY","MESSAGE_ROW","MESSAGE_COLOR","MESSAGE_TEST_FORCE"): changed["message"]=True
 
@@ -473,7 +500,7 @@ def _apply_config(cfg: dict) -> dict:
         "TIME_PREROLL_ENABLED","TIME_PREROLL_SEC","PREROLL_STYLE","PREROLL_COLOR","PREROLL_PPS",
         "MAINTENANCE_MODE","MAINTENANCE_TEXT","MAINTENANCE_SCROLL","MAINTENANCE_PPS",
         "WEATHER_RSS_URL","WEATHER_REFRESH_SEC","WEATHER_ANNOUNCE_SEC","WEATHER_TIMEOUT",
-        "WEATHER_INCLUDE_WATCH","WEATHER_FORCE_ACTIVE","WEATHER_FORCE_TEXT","WEATHER_TEST_DELAY","WEATHER_WARNING_EVERY_N_SCROLLS","WEATHER_WARNING_COLOR","WEATHER_ADVISORY_EVERY_N_SCROLLS","WEATHER_ADVISORY_COLOR","WEATHER_STICKY_SEC","WEATHER_TEST_STICKY_TOTAL","WEATHER_REPEAT_SEC",
+        "WEATHER_INCLUDE_WATCH","WEATHER_FORCE_ACTIVE","WEATHER_FORCE_TEXT","WEATHER_TEST_DELAY","WEATHER_WARNING_EVERY_N_SCROLLS","WEATHER_WARNING_COLOR","WEATHER_ADVISORY_EVERY_N_SCROLLS","WEATHER_ADVISORY_COLOR","WEATHER_STATEMENT_EVERY_N_SCROLLS","WEATHER_STATEMENT_COLOR","WEATHER_PREROLL_ENABLED","WEATHER_PREROLL_SEC","WEATHER_STICKY_SEC","WEATHER_TEST_STICKY_TOTAL","WEATHER_REPEAT_SEC",
         "INJECT_MESSAGE","MESSAGE_EVERY","MESSAGE_ROW","MESSAGE_COLOR","MESSAGE_TEST_FORCE",
         "NIGHT_MODE_ENABLED","NIGHT_MODE_START","NIGHT_MODE_END","NIGHT_MODE_DIM_PCT","NIGHT_MODE_SPEED_PCT","QUICK_DIM_PCT",
         "FONT_FAMILY_BASE","FONT_FAMILY_SCOREBOARD","FONT_FAMILY_DEBUG","PREROLL_FONT_FAMILY","MAINT_FONT_FAMILY",
@@ -482,15 +509,17 @@ def _apply_config(cfg: dict) -> dict:
         "SCOREBOARD_ENABLED","SCOREBOARD_LEAGUES","SCOREBOARD_NHL_TEAMS","SCOREBOARD_NFL_TEAMS",
         "SCOREBOARD_POLL_WINDOW_MIN","SCOREBOARD_POLL_CADENCE","SCOREBOARD_LIVE_REFRESH",
         "SCOREBOARD_PREGAME_WINDOW_MIN","SCOREBOARD_POSTGAME_DELAY_MIN","SCOREBOARD_SHOW_COUNTDOWN",
-        "SCOREBOARD_PRECEDENCE","SCOREBOARD_LAYOUT","SCOREBOARD_UPPERCASE","SCOREBOARD_HOME_FIRST",
+        "SCOREBOARD_PREGAME_ANNOUNCE_EVERY","SCOREBOARD_PREGAME_ANNOUNCE_COLOR","SCOREBOARD_LIVE_TRIGGER_MIN",
+        "SCOREBOARD_PRECEDENCE","SCOREBOARD_HOME_FIRST",
         "SCOREBOARD_SHOW_CLOCK","SCOREBOARD_SHOW_SOG","SCOREBOARD_SHOW_POSSESSION",
         "SCOREBOARD_INCLUDE_OTHERS","SCOREBOARD_ONLY_MY_TEAMS","SCOREBOARD_MAX_GAMES",
-        "SCOREBOARD_SCROLL_ENABLED","SCOREBOARD_STATIC_DWELL_SEC","SCOREBOARD_STATIC_ALIGN",
-        "OVERRIDE_MODE","OVERRIDE_DURATION_MIN","OVERRIDE_MESSAGE_TEXT",
+        "OVERRIDE_MODE","OVERRIDE_DURATION_MIN","OVERRIDE_MESSAGE_TEXT","OVERRIDE_MESSAGE_SCROLL","OVERRIDE_MESSAGE_COLOR","LOGO_PATH","LOGO_PPS","LOGO_SCROLL",
         "SCORE_ALERTS_ENABLED","SCORE_ALERTS_NHL","SCORE_ALERTS_NFL","SCORE_ALERTS_MY_TEAMS_ONLY",
         "SCORE_ALERTS_CYCLES","SCORE_ALERTS_QUEUE_MAX","SCORE_ALERTS_FLASH_MS","SCORE_ALERTS_FLASH_COLORS",
         "SCORE_ALERTS_NFL_TD_DELTA_MIN","SCORE_ALERTS_TEST","SCORE_ALERTS_TEST_LEAGUE","SCORE_ALERTS_TEST_TEAM","SCORE_ALERTS_TEST_INTERVAL_SEC",
-        "TICKERS_TOP","TICKERS_BOT","TICKERS_BOT2","HOLDINGS_ENABLED","HOLDINGS",
+        "TICKERS_TOP","TICKERS_BOT","TICKERS_BOT2","HOLDINGS_ENABLED","HOLDINGS","PORTFOLIO_DISPLAY_ENABLED","PORTFOLIO_LABEL",
+        "BOT_GROUP1_LABEL","BOT_GROUP1_ENABLED",
+        "BOT_GROUP2_LABEL","BOT_GROUP2_ENABLED",
         "MICROFONT_ENABLED",
         "SCOREBOARD_TEST","SCOREBOARD_TEST_LEAGUE","SCOREBOARD_TEST_HOME","SCOREBOARD_TEST_AWAY","SCOREBOARD_TEST_DURATION",
         # CLOCK override tunables
@@ -623,11 +652,96 @@ def _extract_live_game_data(scoreboard_latest):
                         "away_code": away_code,
                         "home_score": home_score,
                         "away_score": away_score,
+                        "home_sog": int((g.get("home") or {}).get("sog", 0) or 0),
+                        "away_sog": int((g.get("away") or {}).get("sog", 0) or 0),
                         "clock": game_clock,
                         "period": period,
                         "league": league_key
                     }
     return None
+
+def _get_pregame_announce_game(scoreboard_latest, max_minutes):
+    """Return (game_dict, league_key) for the first watched-team PREGAME game within
+    max_minutes of start, or (None, None). Only fires for teams in SCOREBOARD_NHL_TEAMS /
+    SCOREBOARD_NFL_TEAMS so 'others' games don't trigger announcements."""
+    for league_key in ("NHL", "NFL"):
+        payload = scoreboard_latest.get(league_key)
+        if not (payload and payload.get("games")):
+            continue
+        wanted = set()
+        if league_key == "NHL":
+            wanted = {t.upper() for t in (SCOREBOARD_NHL_TEAMS or [])}
+        elif league_key == "NFL":
+            wanted = {t.upper() for t in (SCOREBOARD_NFL_TEAMS or [])}
+        for g in payload["games"]:
+            if g.get("state") != "PREGAME":
+                continue
+            mins = g.get("minutes_until_start", 9999)
+            if mins > max_minutes:
+                continue
+            home = (g.get("home") or {}).get("code", "").upper()
+            away = (g.get("away") or {}).get("code", "").upper()
+            if not wanted or home in wanted or away in wanted:
+                return g, league_key
+    return None, None
+
+
+def _extract_pregame_game_data(scoreboard_latest, trigger_min):
+    """Return a game_data dict (same shape as _extract_live_game_data) for a PREGAME
+    game within trigger_min minutes of start, for the T-N scoreboard flip. Returns None
+    if no such game exists."""
+    for league_key in ("NHL", "NFL"):
+        payload = scoreboard_latest.get(league_key)
+        if not (payload and payload.get("games")):
+            continue
+        for g in payload["games"]:
+            if g.get("state") != "PREGAME":
+                continue
+            mins = g.get("minutes_until_start", 9999)
+            if mins <= trigger_min:
+                return {
+                    "home_code": (g.get("home") or {}).get("code", "???"),
+                    "away_code": (g.get("away") or {}).get("code", "???"),
+                    "home_score": 0,
+                    "away_score": 0,
+                    "clock": "SOON" if mins <= 1 else f"{mins}m",
+                    "period": "PRE",
+                    "league": league_key,
+                }
+    return None
+
+
+def _load_logo_surface(path: str, target_h: int):
+    """Load a logo image, scale to target_h pixels tall (preserving aspect ratio).
+    Uses PIL for loading — reliable in headless/dummy SDL mode where pygame.image.load
+    can fail to decode PNG/JPG without SDL_image.  PIL is already a hard dependency
+    (used in write_surface_to_rgb_matrix).
+    Relative paths are resolved against the ticker.py script directory first."""
+    # Resolve relative path against the script's own directory
+    if not os.path.isabs(path):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        candidate = os.path.join(script_dir, path)
+        if os.path.isfile(candidate):
+            path = candidate
+    try:
+        from PIL import Image as _PILImage
+        pil_img = _PILImage.open(path).convert("RGBA")
+        orig_w, orig_h = pil_img.size
+        if orig_h == 0:
+            return None
+        scale = target_h / orig_h
+        new_w = max(1, int(orig_w * scale))
+        pil_scaled = pil_img.resize((new_w, target_h), _PILImage.LANCZOS)
+        # pygame.image.frombuffer with RGBA avoids any display-mode requirement
+        surf = pygame.image.frombuffer(pil_scaled.tobytes(), (new_w, target_h), "RGBA")
+        out = pygame.Surface((new_w, target_h), pygame.SRCALPHA)
+        out.blit(surf, (0, 0))
+        print(f"[LOGO] Loaded '{path}' → {new_w}×{target_h}px", flush=True)
+        return out
+    except Exception as e:
+        print(f"[LOGO] Failed to load '{path}': {e}", flush=True)
+        return None
+
 
 def run():
     global _shutdown_requested
@@ -643,8 +757,7 @@ def run():
     
     # 2) Initialize rendering module globals
     set_rendering_globals(
-        W=W, H=H, LAYOUT=LAYOUT, ROW_H=ROW_H, TOP_Y=TOP_Y, BOT_Y=BOT_Y,
-        IS_SINGLE=IS_SINGLE, IS_DUAL=IS_DUAL,
+        W=W, H=H, ROW_H=ROW_H, TOP_Y=TOP_Y, BOT_Y=BOT_Y,
         MICROFONT_ENABLED=MICROFONT_ENABLED,
         TZINFO=TZINFO,
         NIGHT_MODE_ENABLED=NIGHT_MODE_ENABLED,
@@ -688,7 +801,7 @@ def run():
     print(f"[START] Config file: {CONFIG_PATH}", flush=True)
     if DEMO_MODE: print("[START] DEMO MODE: no network calls", flush=True)
     if DEBUG_OVERLAY: print("[START] DEBUG overlay ON (bottom line)", flush=True)
-    if MICROFONT_ENABLED and IS_DUAL: print("[START] Microfont enabled for dual layout row text", flush=True)
+    if MICROFONT_ENABLED: print("[START] Microfont enabled for dual layout row text", flush=True)
     if TIME_PREROLL_ENABLED:
         print(f"[START] Time preroll: ENABLED {TIME_PREROLL_SEC}s style={PREROLL_STYLE} color={PREROLL_COLOR} pps={PREROLL_PPS}", flush=True)
     else:
@@ -701,12 +814,11 @@ def run():
     if MAINTENANCE_MODE: print(f"[START] Maintenance: scroll={int(MAINTENANCE_SCROLL)} pps={MAINTENANCE_PPS}", flush=True)
     if SCOREBOARD_ENABLED:
         print(f"[START] Scoreboard: leagues={SCOREBOARD_LEAGUES} NHL={SCOREBOARD_NHL_TEAMS} NFL={SCOREBOARD_NFL_TEAMS} test={int(SCOREBOARD_TEST)} precedence={SCOREBOARD_PRECEDENCE} my_only={int(SCOREBOARD_ONLY_MY_TEAMS)}", flush=True)
-        print(f"[START] Scoreboard scroll={'ON' if SCOREBOARD_SCROLL_ENABLED else 'OFF'} align={SCOREBOARD_STATIC_ALIGN} dwell={SCOREBOARD_STATIC_DWELL_SEC}s", flush=True)
     if SCORE_ALERTS_ENABLED:
         print(f"[START] Score Alerts: NHL={int(SCORE_ALERTS_NHL)} NFL={int(SCORE_ALERTS_NFL)} my_only={int(SCORE_ALERTS_MY_TEAMS_ONLY)} cycles={SCORE_ALERTS_CYCLES} queue={SCORE_ALERTS_QUEUE_MAX} flash_ms={SCORE_ALERTS_FLASH_MS} test={int(SCORE_ALERTS_TEST)}", flush=True)
 
     # Compute override AFTER config load (and keep variables mutable for reload)
-    override_mode = OVERRIDE_MODE if OVERRIDE_MODE in ("BRIGHT","SCOREBOARD","MESSAGE","MAINT","CLOCK") else "OFF"
+    override_mode = OVERRIDE_MODE if OVERRIDE_MODE in ("BRIGHT","SCOREBOARD","MESSAGE","MAINT","CLOCK","LOGO") else "OFF"
     override_active = (override_mode != "OFF")
     override_end_ts = (time.time() + OVERRIDE_DURATION_MIN*60) if (override_active and OVERRIDE_DURATION_MIN>0) else None
     if override_active:
@@ -773,6 +885,9 @@ def run():
     maint_big_font  = get_maint_big_font()
     preroll_big_font= get_preroll_big_font()
 
+    if override_mode == "LOGO":
+        logo_surf = _load_logo_surface(LOGO_PATH, H)
+
     if MAINTENANCE_MODE and not override_active:
         print("[MAINT] Maintenance active; entering maintenance loop.", flush=True)
         return run_maintenance_loop(screen, clock, font_row)
@@ -787,6 +902,8 @@ def run():
     market_cache={}; market_state="UNKNOWN"; last_success_ts=0.0; last_result_ok=False
     weather_active=False; weather_message=""
     scoreboard_latest = {}  # league -> payload
+    scoreboard_game_today = False  # True if any watched team has a game today (all-day flag)
+    logo_surf = None; x_logo = float(W)  # LOGO override mode state
     # Full-height scoreboard state
     scoreboard_flash = ScoreboardFlashState()
     last_scores_fullheight = {}
@@ -797,12 +914,27 @@ def run():
     
     # Initialize ticker parts NOW (after market_cache exists but with empty cache)
     # This prevents black screen on startup
-    single_parts, top_parts, bot_parts = [], [], []
+    single_parts, top_parts, bot_parts, bot_parts2 = [], [], [], []
     try:
         single_parts,_ = build_row_surfaces_from_cache(TICKERS_TOP+TICKERS_BOT, market_cache, font_row, HOLDINGS_ENABLED)
         top_parts,_    = build_row_surfaces_from_cache(TICKERS_TOP, market_cache, font_row, HOLDINGS_ENABLED)
         bot_parts,_    = build_row_surfaces_from_cache(TICKERS_BOT, market_cache, font_row, HOLDINGS_ENABLED)
         bot_parts2,_   = build_row_surfaces_from_cache(TICKERS_BOT2, market_cache, font_row, HOLDINGS_ENABLED) if TICKERS_BOT2 else ([], False)
+        if PORTFOLIO_DISPLAY_ENABLED:
+            _port = build_portfolio_parts(market_cache, HOLDINGS, PORTFOLIO_LABEL)
+            if _port:
+                top_parts    = _port + top_parts
+                single_parts = _port + single_parts
+        if BOT_GROUP1_ENABLED and HOLDINGS:
+            _h1 = {p[0]: HOLDINGS[p[0]] for p in TICKERS_BOT if p and p[0] in HOLDINGS}
+            if _h1:
+                _g1 = build_portfolio_parts(market_cache, _h1, BOT_GROUP1_LABEL)
+                if _g1: bot_parts = _g1 + bot_parts
+        if TICKERS_BOT2 and BOT_GROUP2_ENABLED and HOLDINGS:
+            _h2 = {p[0]: HOLDINGS[p[0]] for p in TICKERS_BOT2 if p and p[0] in HOLDINGS}
+            if _h2:
+                _g2 = build_portfolio_parts(market_cache, _h2, BOT_GROUP2_LABEL)
+                if _g2: bot_parts2 = _g2 + bot_parts2
         print(f"[INIT] Built initial ticker parts: {len(single_parts)} single, {len(top_parts)} top, {len(bot_parts)} bot, {len(bot_parts2)} bot2", flush=True)
     except Exception as e:
         print(f"[INIT] Failed to build initial ticker parts: {e}", flush=True)
@@ -818,7 +950,6 @@ def run():
         "active": False,          # last-known active flag from worker or test
         "message": "",            # last headline
         "severity": "",           # severity level (warning, advisory, watch)
-        "show_until": 0.0,        # wallclock ts until which the banner must remain pinned
         "next_repeat_at": 0.0,    # earliest time allowed to re-pin while still active
         "test_forced_until": 0.0  # when in test harness, how long we pretend it's still active
     }
@@ -827,7 +958,7 @@ def run():
         """Non-blocking drain of worker queues into local caches."""
         nonlocal market_cache, market_state, last_success_ts, last_result_ok
         nonlocal weather_active, weather_message
-        nonlocal scoreboard_latest, weather_banner
+        nonlocal scoreboard_latest, scoreboard_game_today, weather_banner
         if not DEMO_MODE:
             try:
                 while True:
@@ -857,7 +988,6 @@ def run():
                                 weather_banner["active"] = True
                                 weather_banner["message"] = new_msg or "Weather alert"
                                 weather_banner["severity"] = weather_severity
-                                # Don't use show_until - using scroll-count display instead
                         else:
                             weather_banner["active"] = False
             except queue_std.Empty: pass
@@ -869,6 +999,8 @@ def run():
                             payload = msg["payload"]; league=(payload.get("league") or "").upper()
                             if league:
                                 scoreboard_latest[league]=payload
+                        elif msg.get("type")=="scoreboard_status":
+                            scoreboard_game_today = bool(msg["payload"].get("game_today", False))
                 except queue_std.Empty: pass
 
     def detect_score_bursts():
@@ -925,6 +1057,15 @@ def run():
         nonlocal last_scores_fullheight
         if not scoreboard_latest:
             return
+        # Trim _goal_logged to only active LIVE game IDs to prevent unbounded growth
+        active_live_ids = {
+            str(g.get("id", ""))
+            for p in scoreboard_latest.values()
+            for g in (p.get("games") or [])
+            if g.get("state") == "LIVE"
+        }
+        for key in [k for k in _goal_logged if not any(k.startswith(gid) for gid in active_live_ids if gid)]:
+            del _goal_logged[key]
 
         for league, payload in scoreboard_latest.items():
             for game in (payload.get("games") or []):
@@ -959,14 +1100,16 @@ def run():
     state = STATE_TICKER; state_enter_ts = time.time()
     preroll_reason = "hour"  # "hour", "market_open", or "market_close"
     next_top_ts = _compute_next_hour_ts()  # Compute actual next top of hour
-    prefetch_done_for_this_hour = False
     weather_test_injected = False
 
     # Scrolling state
     x_single, x_top, x_bot = float(W), float(W), float(W)
-    x_maint = float(W)  # Scrolling position for maintenance mode
+    x_maint         = float(W)  # Scrolling position for maintenance mode
+    x_msg_ovr       = float(W)  # Scrolling position for MESSAGE override
+    x_weather_preroll = float(W)  # Scrolling position for weather preroll
     completed_single, completed_top, completed_bot = 0, 0, 0
     show_msg_single = show_msg_top = show_msg_bot = False
+    show_pregame_announce_top = False  # Pregame countdown announce flag (top row)
     weather_scroll_shown = False  # Track if currently showing weather
     
     # Property of solutions reseaux chromatel
@@ -1017,79 +1160,17 @@ def run():
             return False
         sev = weather_banner.get("severity", "")
         if sev == "warning":
-            # Show warning every N scrolls
             return (scroll_count % max(1, WEATHER_WARNING_EVERY_N_SCROLLS)) == 0
         elif sev in ["advisory", "watch"]:
-            # Show advisory/watch less frequently
             return (scroll_count % max(1, WEATHER_ADVISORY_EVERY_N_SCROLLS)) == 0
+        elif sev == "statement":
+            return (scroll_count % max(1, WEATHER_STATEMENT_EVERY_N_SCROLLS)) == 0
         return False
-
-    def build_scoreboard_compact_parts():
-        """
-        Build single or dual-line scoreboard text that fits in the normal ticker row(s).
-        Returns (lines_top, lines_bot): each is a list of Surfaces.
-        lines_top always present; lines_bot may be empty for single layout.
-        """
-        font_sb_ = get_sb_font()
-        lines_top = []
-        lines_bot = []
-        if not SCOREBOARD_ENABLED or not scoreboard_latest:
-            return [font_sb_.render("Scoreboard (no data) ", True, WHITE)], []
-        ordered = []
-        for key in ["NHL","NFL"]:
-            p = scoreboard_latest.get(key)
-            if not p: continue
-            games = p.get("games") or []
-            live=[g for g in games if g.get("state")=="LIVE"]
-            fut =[g for g in games if g.get("state")=="PREGAME"]
-            for g in (live + fut)[:SCOREBOARD_MAX_GAMES]:
-                ordered.append((key,g))
-        if not ordered:
-            return [font_sb_.render("Scoreboard (no data) ", True, WHITE)], []
-
-        def mk_compact(key,g):
-            hc, ac = g["home"]["code"], g["away"]["code"]
-            hs, as_ = g["home"].get("score",0), g["away"].get("score",0)
-            state=g.get("state",""); pd=g.get("period",0); ck=g.get("clock","")
-            period_label = g.get("period_label", f"P{pd}")
-            
-            # PREGAME with countdown
-            if state == "PREGAME" and SCOREBOARD_SHOW_COUNTDOWN:
-                mins_until = g.get("minutes_until_start")
-                if mins_until is not None and mins_until >= 0:
-                    order = f"{hc} VS {ac}" if SCOREBOARD_HOME_FIRST else f"{ac} VS {hc}"
-                    return f"PREGAME {order} - GAME STARTS IN {mins_until}m"
-                else:
-                    order = f"{hc} VS {ac}" if SCOREBOARD_HOME_FIRST else f"{ac} VS {hc}"
-                    return f"PREGAME {order}"
-            
-            # LIVE or FINAL
-            if key=="NHL" and state=="LIVE" and SCOREBOARD_SHOW_CLOCK:
-                tail = f"({period_label} {ck})" if ck else f"({period_label})"
-            elif key=="NFL" and state=="LIVE" and SCOREBOARD_SHOW_CLOCK:
-                tail = f"(Q{pd} {ck})"
-            else:
-                tail = f"({state})"
-            order = (f"{hc} {hs} - {ac} {as_}") if SCOREBOARD_HOME_FIRST else (f"{ac} {as_} - {hc} {hs}")
-            return f"{order} {tail}"
-
-        for key,g in ordered[:SCOREBOARD_MAX_GAMES]:
-            lines_top.append(font_sb_.render(mk_compact(key,g) + " ", True, WHITE))
-        # second-row detail (only first game)
-        key,g = ordered[0]
-        if key=="NHL" and SCOREBOARD_SHOW_SOG:
-            sog=f"SOG H:{g['home'].get('sog',0)} A:{g['away'].get('sog',0)} "
-            lines_bot=[font_sb_.render(sog, True, WHITE)]
-        elif key=="NFL" and SCOREBOARD_SHOW_POSSESSION:
-            pos=(g.get("possession") or "").upper()
-            if pos in ("HOME","AWAY"):
-                who = g["home"]["code"] if pos=="HOME" else g["away"]["code"]
-                lines_bot=[font_sb_.render(f"Possession: {who} ", True, WHITE)]
-        return lines_top, lines_bot
 
     # ---- main loop ----
     print("[MAIN] Entering main rendering loop...", flush=True)
     loop_count = 0
+    prev_ticks = pygame.time.get_ticks()
     try:
         while not _shutdown_requested:
             # Apply time-limited override expiry
@@ -1098,9 +1179,9 @@ def run():
                 override_active=False; override_mode="OFF"; override_end_ts=None
 
             now_ticks = pygame.time.get_ticks()
-            dt = (now_ticks - getattr(run, "_prev_ticks", now_ticks))/1000.0
-            run._prev_ticks = now_ticks
-            
+            dt = (now_ticks - prev_ticks) / 1000.0
+            prev_ticks = now_ticks
+
             loop_count += 1
             poll_queues_nonblock()
             detect_goals()  # Check for score changes
@@ -1158,7 +1239,6 @@ def run():
                             "active": False,
                             "message": "",
                             "severity": "",
-                            "show_until": 0.0,
                             "next_repeat_at": 0.0,
                             "test_forced_until": 0.0
                         }
@@ -1188,6 +1268,7 @@ def run():
 
                         if SCOREBOARD_ENABLED:
                             scoreboard_latest.clear()
+                            scoreboard_game_today = False
                             test_cfg = {
                                 "enabled":SCOREBOARD_TEST, "league":SCOREBOARD_TEST_LEAGUE,
                                 "home":SCOREBOARD_TEST_HOME, "away":SCOREBOARD_TEST_AWAY,
@@ -1202,15 +1283,57 @@ def run():
                             workers["scoreboard"].start(); print("[CFG] scoreboard worker restarted", flush=True)
                         else:
                             scoreboard_latest.clear()
+                            scoreboard_game_today = False
                             print("[CFG] scoreboard disabled; worker stopped", flush=True)
                     except Exception as e:
                         print("[CFG] scoreboard restart failed:", e, flush=True)
-                
+
+                # Flush team logo cache so newly added PNGs are picked up without restart
+                try:
+                    clear_team_logo_cache()
+                except Exception as e:
+                    print("[CFG] logo cache clear failed:", e, flush=True)
+
                 if cfg_info.get("override"):
-                    override_mode = OVERRIDE_MODE if OVERRIDE_MODE in ("BRIGHT","SCOREBOARD","MESSAGE","MAINT","CLOCK") else "OFF"
+                    override_mode = OVERRIDE_MODE if OVERRIDE_MODE in ("BRIGHT","SCOREBOARD","MESSAGE","MAINT","CLOCK","LOGO") else "OFF"
                     override_active = (override_mode != "OFF")
                     override_end_ts = (time.time() + OVERRIDE_DURATION_MIN*60) if (override_active and OVERRIDE_DURATION_MIN>0) else None
+                    if override_mode == "LOGO":
+                        logo_surf = _load_logo_surface(LOGO_PATH, H)
+                        x_logo = float(W)
                     print(f"[CFG] Override now: {override_mode} ({'dur '+str(OVERRIDE_DURATION_MIN)+'m' if OVERRIDE_DURATION_MIN>0 else 'until cleared'})", flush=True)
+
+            # Worker watchdog: auto-restart any crashed worker processes every ~30s
+            if not DEMO_MODE and loop_count % max(1, FPS * 30) == 0:
+                for wname, proc in list(workers.items()):
+                    if proc is not None and not proc.is_alive():
+                        print(f"[WATCHDOG] {wname} worker died (exit={proc.exitcode}), restarting", flush=True)
+                        try:
+                            if wname == "market":
+                                new_proc = Process(target=market_worker,
+                                    args=(ALL_TICKERS, REFRESH_SEC, mq, STATUS_PATH, TZINFO), daemon=True)
+                                new_proc.start(); workers[wname] = new_proc
+                            elif wname == "weather":
+                                new_proc = Process(target=weather_worker,
+                                    args=(WEATHER_RSS_URL, WEATHER_INCLUDE_WATCH, WEATHER_REFRESH_SEC,
+                                          WEATHER_TIMEOUT, WEATHER_FORCE_ACTIVE, WEATHER_FORCE_TEXT,
+                                          wq, STATUS_PATH, TZINFO), daemon=True)
+                                new_proc.start(); workers[wname] = new_proc
+                            elif wname == "scoreboard" and SCOREBOARD_ENABLED:
+                                test_cfg = {
+                                    "enabled": SCOREBOARD_TEST, "league": SCOREBOARD_TEST_LEAGUE,
+                                    "home": SCOREBOARD_TEST_HOME, "away": SCOREBOARD_TEST_AWAY,
+                                    "duration": SCOREBOARD_TEST_DURATION
+                                }
+                                new_proc = Process(target=scoreboard_worker,
+                                    args=(SCOREBOARD_LEAGUES, SCOREBOARD_NHL_TEAMS, SCOREBOARD_NFL_TEAMS,
+                                          SCOREBOARD_POLL_WINDOW_MIN, SCOREBOARD_POLL_CADENCE, SCOREBOARD_LIVE_REFRESH,
+                                          SCOREBOARD_INCLUDE_OTHERS, SCOREBOARD_ONLY_MY_TEAMS, SCOREBOARD_MAX_GAMES,
+                                          test_cfg, sbq, STATUS_PATH, TZINFO,
+                                          SCOREBOARD_PREGAME_WINDOW_MIN, SCOREBOARD_POSTGAME_DELAY_MIN), daemon=True)
+                                new_proc.start(); workers[wname] = new_proc
+                        except Exception as e:
+                            print(f"[WATCHDOG] Failed to restart {wname}: {e}", flush=True)
 
             # Weather TEST harness: force logical active window after delay
             if WEATHER_TEST_DELAY > 0 and not weather_test_injected and (time.time() - start_ts) >= WEATHER_TEST_DELAY:
@@ -1221,14 +1344,12 @@ def run():
                 weather_banner["active"] = True
                 weather_banner["message"] = test_msg
                 weather_banner["severity"] = "warning"  # Set severity for test
-                weather_banner["show_until"] = time.time() + max(5, WEATHER_STICKY_SEC)
                 weather_banner["next_repeat_at"] = time.time() + max(WEATHER_REPEAT_SEC, WEATHER_ANNOUNCE_SEC)
                 print(f"[WEATHER-TEST] Activated test weather alert: {test_msg}", flush=True)
 
             if weather_banner["test_forced_until"] > 0:
                 if time.time() <= weather_banner["test_forced_until"]:
                     if time.time() >= weather_banner["next_repeat_at"]:
-                        weather_banner["show_until"] = time.time() + max(5, WEATHER_STICKY_SEC)
                         weather_banner["next_repeat_at"] = time.time() + max(WEATHER_REPEAT_SEC, WEATHER_ANNOUNCE_SEC)
                     weather_banner["active"] = True
                 else:
@@ -1249,12 +1370,43 @@ def run():
                 top_parts,_    = build_row_surfaces_from_cache(TICKERS_TOP, market_cache, font_row, HOLDINGS_ENABLED)
                 bot_parts,_    = build_row_surfaces_from_cache(TICKERS_BOT, market_cache, font_row, HOLDINGS_ENABLED)
                 if TICKERS_BOT2: bot_parts2,_ = build_row_surfaces_from_cache(TICKERS_BOT2, market_cache, font_row, HOLDINGS_ENABLED)
-
-            secs_to_top = next_top_ts - time.time()
-            if 0 < secs_to_top <= 20 and not prefetch_done_for_this_hour:
-                prefetch_done_for_this_hour=True
+                if PORTFOLIO_DISPLAY_ENABLED:
+                    _port = build_portfolio_parts(market_cache, HOLDINGS, PORTFOLIO_LABEL)
+                    if _port:
+                        top_parts    = _port + top_parts
+                        single_parts = _port + single_parts
+                if BOT_GROUP1_ENABLED and HOLDINGS:
+                    _h1 = {p[0]: HOLDINGS[p[0]] for p in TICKERS_BOT if p and p[0] in HOLDINGS}
+                    if _h1:
+                        _g1 = build_portfolio_parts(market_cache, _h1, BOT_GROUP1_LABEL)
+                        if _g1: bot_parts = _g1 + bot_parts
+                if TICKERS_BOT2 and BOT_GROUP2_ENABLED and HOLDINGS:
+                    _h2 = {p[0]: HOLDINGS[p[0]] for p in TICKERS_BOT2 if p and p[0] in HOLDINGS}
+                    if _h2:
+                        _g2 = build_portfolio_parts(market_cache, _h2, BOT_GROUP2_LABEL)
+                        if _g2: bot_parts2 = _g2 + bot_parts2
 
             any_live = any(any(g.get("state")=="LIVE" for g in (p.get("games") or [])) for p in scoreboard_latest.values())
+
+            # Postgame window: stay in scoreboard if a FINAL game was recently published.
+            # The worker sends FINAL game data for SCOREBOARD_POSTGAME_DELAY_MIN minutes, then stops.
+            # We use payload freshness to detect whether we're still inside that window.
+            any_postgame_active = False
+            _now_ts = time.time()
+            for _pi in scoreboard_latest.values():
+                _payload_age_min = (_now_ts - (_pi.get("ts") or 0)) / 60
+                if _payload_age_min <= SCOREBOARD_POSTGAME_DELAY_MIN + 2:  # +2 min buffer for poll lag
+                    for _gi in (_pi.get("games") or []):
+                        if _gi.get("state") in ("FINAL", "OFF"):
+                            any_postgame_active = True
+
+            # Pregame imminent: a watched-team PREGAME game is within SCOREBOARD_LIVE_TRIGGER_MIN minutes
+            any_pregame_imminent = False
+            if SCOREBOARD_SHOW_COUNTDOWN and SCOREBOARD_ENABLED and scoreboard_latest:
+                for _pi in scoreboard_latest.values():
+                    for _gi in (_pi.get("games") or []):
+                        if _gi.get("state") == "PREGAME" and _gi.get("minutes_until_start", 9999) <= SCOREBOARD_LIVE_TRIGGER_MIN:
+                            any_pregame_imminent = True
 
             # Normal state transitions
             # Priority order from STATE_TICKER:
@@ -1266,23 +1418,32 @@ def run():
             if not override_active and not (SCORE_ALERTS_ENABLED and alert_obj):
                 if state==STATE_TICKER:
                     if TIME_PREROLL_ENABLED and time.time() >= next_top_ts:
-                        state=STATE_PREROLL; state_enter_ts=time.time(); preroll_reason="hour"; print(f'[PREROLL] Fired at top of hour for {TIME_PREROLL_SEC}s (style={PREROLL_STYLE}, color={PREROLL_COLOR}, pps={PREROLL_PPS})', flush=True); next_top_ts = _compute_next_hour_ts(); prefetch_done_for_this_hour=False
+                        state=STATE_PREROLL; state_enter_ts=time.time(); preroll_reason="hour"; print(f'[PREROLL] Fired at top of hour for {TIME_PREROLL_SEC}s (style={PREROLL_STYLE}, color={PREROLL_COLOR}, pps={PREROLL_PPS})', flush=True); next_top_ts = _compute_next_hour_ts()
                     else:
                         # Check for market event (open/close) preroll before scoreboard
                         market_event_trigger, event_type = check_market_event_preroll()
                         if market_event_trigger:
                             state=STATE_PREROLL; state_enter_ts=time.time(); preroll_reason=f"market_{event_type}"
                             print(f'[PREROLL] Fired for MARKET {event_type.upper()} for {TIME_PREROLL_SEC}s (style={PREROLL_STYLE}, color={PREROLL_COLOR})', flush=True)
-                        elif SCOREBOARD_ENABLED and any_live:
+                        elif SCOREBOARD_ENABLED and (any_live or any_pregame_imminent):
                             state=STATE_SCOREBOARD; state_enter_ts=time.time()
                 elif state==STATE_PREROLL:
-                    if SCOREBOARD_PRECEDENCE=="force" and SCOREBOARD_ENABLED and any_live:
+                    if SCOREBOARD_PRECEDENCE=="force" and SCOREBOARD_ENABLED and (any_live or any_pregame_imminent):
                         state=STATE_SCOREBOARD; state_enter_ts=time.time()
-                    elif time.time() - state_enter_ts >= TIME_PREROLL_SEC:
-                        state = STATE_TICKER
-                        state_enter_ts=time.time()
+                    else:
+                        _preroll_dur = WEATHER_PREROLL_SEC if preroll_reason == "weather" else TIME_PREROLL_SEC
+                        if time.time() - state_enter_ts >= _preroll_dur:
+                            # After hour preroll, chain into weather preroll if an alert is active
+                            if preroll_reason == "hour" and WEATHER_PREROLL_ENABLED \
+                                    and weather_banner.get("active") and weather_banner.get("message"):
+                                preroll_reason = "weather"
+                                state_enter_ts = time.time()
+                                x_weather_preroll = float(W)
+                                print(f"[PREROLL] Weather alert: {weather_banner.get('message','')[:50]}", flush=True)
+                            else:
+                                state = STATE_TICKER; state_enter_ts = time.time()
                 elif state==STATE_SCOREBOARD:
-                    if not (SCOREBOARD_ENABLED and any_live):
+                    if not (SCOREBOARD_ENABLED and (any_live or any_postgame_active or any_pregame_imminent)):
                         state=STATE_TICKER; state_enter_ts=time.time()
 
             # Compose frame
@@ -1301,24 +1462,8 @@ def run():
                 if (not last_result_ok) or (time.time() - (last_success_ts or 0)) > FRESH_SEC:
                     return RED
                 
-                # Check if my teams have a game today (highest priority)
-                my_teams_playing_today = False
-                try:
-                    if scoreboard_latest:
-                        for league_key in ["NHL", "NFL"]:
-                            payload = scoreboard_latest.get(league_key)
-                            if payload and payload.get("games"):
-                                for g in payload["games"]:
-                                    # Any state counts - PREGAME, LIVE, FINAL
-                                    if g.get("state") in ["PREGAME", "LIVE", "FINAL"]:
-                                        my_teams_playing_today = True
-                                        break
-                            if my_teams_playing_today:
-                                break
-                except Exception:
-                    pass
-                
-                if my_teams_playing_today:
+                # Blue all day if any watched team has a game today (set by worker on first fetch)
+                if scoreboard_game_today:
                     return (0, 150, 255)  # Blue for game day
                 
                 # Check if pre-market (before 9:30 AM ET on weekdays)
@@ -1382,7 +1527,8 @@ def run():
                                 frame, game_data, score_font,
                                 flash_home=flash_home,
                                 flash_away=flash_away,
-                                flash_color=flash_color
+                                flash_color=flash_color,
+                                show_sog=SCOREBOARD_SHOW_SOG
                             )
                         else:
                             # No live games - show appropriate message
@@ -1406,26 +1552,21 @@ def run():
                         except Exception:
                             pass
                 elif override_mode=="MESSAGE":
-                    # Show override message
+                    # Full-height message override — uses big font to fill the display
                     txt = (OVERRIDE_MESSAGE_TEXT or "MESSAGE").strip()
-                    msg_srf = build_message_surface(txt, parse_color("yellow"), font_row)
-                    parts = [time_srf, msg_srf]
-                    if IS_SINGLE:
-                        curr_x = x_single; total_w = 0
-                        for s in parts:
-                            w = s.get_width()
-                            if -w < curr_x < W: frame.blit(s, (_sp(curr_x), 1))
-                            curr_x += w; total_w += w
-                        total_w = max(1, total_w); x_single -= pps_single_current * dt
-                        if x_single < -total_w: x_single = float(W)
+                    srf = maint_big_font.render(txt, True, parse_color(OVERRIDE_MESSAGE_COLOR))
+                    w = srf.get_width()
+                    y = max(0, (H - srf.get_height()) // 2)
+                    if OVERRIDE_MESSAGE_SCROLL:
+                        if -w < x_msg_ovr < W:
+                            frame.blit(srf, (_sp(x_msg_ovr), y))
+                        x_msg_ovr -= MAINTENANCE_PPS * dt
+                        if x_msg_ovr < -w:
+                            x_msg_ovr = float(W)
                     else:
-                        curr_x = x_top; total_w = 0
-                        for s in parts:
-                            w = s.get_width()
-                            if -w < curr_x < W: frame.blit(s, (_sp(curr_x), TOP_Y))
-                            curr_x += w; total_w += w
-                        total_w = max(1, total_w); x_top -= pps_top_current * dt
-                        if x_top < -total_w: x_top = float(W)
+                        # Static: centered horizontally and vertically
+                        xt = max(0, (W - w) // 2)
+                        frame.blit(srf, (xt, y))
                 elif override_mode=="MAINT":
                     # Maintenance screen
                     txt = (MAINTENANCE_TEXT or "MAINTENANCE").strip()
@@ -1447,10 +1588,8 @@ def run():
                         y = max(0, (H - srf.get_height()) // 2)
                         frame.blit(srf, (xt, y))
                 elif override_mode=="CLOCK":
-                    # Big centered clock - FIX: Ensure fonts are available
+                    # Big centered clock
                     try:
-                        # Re-fetch font to ensure it exists
-                        clock_font = get_preroll_big_font()
                         clock_srf = build_clock_surface(W, H)
                         xt = max(0, (W - clock_srf.get_width()) // 2)
                         yt = max(0, (H - clock_srf.get_height()) // 2)
@@ -1459,6 +1598,24 @@ def run():
                         print(f"[CLOCK] render error: {e}", flush=True)
                         # Fallback: show time surface
                         frame.blit(time_srf, (2, 1 if IS_SINGLE else TOP_Y))
+                elif override_mode=="LOGO":
+                    # Scroll or static centered logo
+                    if logo_surf is not None:
+                        lw = logo_surf.get_width()
+                        ly = max(0, (H - logo_surf.get_height()) // 2)
+                        if LOGO_SCROLL:
+                            if -lw < x_logo < W:
+                                frame.blit(logo_surf, (_sp(x_logo), ly))
+                            x_logo -= LOGO_PPS * dt
+                            if x_logo < -lw:
+                                x_logo = float(W)
+                        else:
+                            # Static: centered horizontally
+                            lx = max(0, (W - lw) // 2)
+                            frame.blit(logo_surf, (lx, ly))
+                    else:
+                        err_srf = font_row.render("LOGO?", True, RED)
+                        frame.blit(err_srf, (2, max(0, (H - err_srf.get_height()) // 2)))
 
             # SCORE ALERTS (top priority if active)
             elif SCORE_ALERTS_ENABLED and (alert_obj or alert_queue):
@@ -1480,8 +1637,29 @@ def run():
 
             # PREROLL
             elif state==STATE_PREROLL:
+                if preroll_reason == "weather":
+                    # Full-screen weather alert preroll after top-of-hour clock
+                    weather_msg = weather_banner.get("message", "")
+                    weather_sev = weather_banner.get("severity", "")
+                    if weather_msg:
+                        if weather_sev == "warning":
+                            _wcol = parse_color(WEATHER_WARNING_COLOR)
+                        elif weather_sev == "statement":
+                            _wcol = parse_color(WEATHER_STATEMENT_COLOR)
+                        else:
+                            _wcol = parse_color(WEATHER_ADVISORY_COLOR)
+                        _wsrf = maint_big_font.render(weather_msg, True, _wcol)
+                        _ww = _wsrf.get_width()
+                        _wy = max(0, (H - _wsrf.get_height()) // 2)
+                        if -_ww < x_weather_preroll < W:
+                            frame.blit(_wsrf, (_sp(x_weather_preroll), _wy))
+                        x_weather_preroll -= MAINTENANCE_PPS * dt
+                        if x_weather_preroll < -_ww:
+                            x_weather_preroll = float(W)
+                    else:
+                        state = STATE_TICKER; state_enter_ts = time.time()
                 # For market events, always show the announcement regardless of style
-                if preroll_reason in ("market_open", "market_close"):
+                elif preroll_reason in ("market_open", "market_close"):
                     # Market event preroll - show announcement if still in window
                     should_announce, announcement, announce_color = get_market_event_announcement()
                     if should_announce and announcement:
@@ -1574,6 +1752,9 @@ def run():
             elif state==STATE_SCOREBOARD and SCOREBOARD_ENABLED:
                 # STATE_SCOREBOARD - Full-height scoreboard with logos
                 game_data = _extract_live_game_data(scoreboard_latest) if scoreboard_latest else None
+                # If no live game, check for imminent pregame (T-N scoreboard flip)
+                if not game_data and SCOREBOARD_SHOW_COUNTDOWN and scoreboard_latest:
+                    game_data = _extract_pregame_game_data(scoreboard_latest, SCOREBOARD_LIVE_TRIGGER_MIN)
                 if game_data:
                     score_font = pygame.font.SysFont("monospace", 14, bold=True)
                     flash_color = scoreboard_flash.get_flash_color()
@@ -1583,7 +1764,8 @@ def run():
                         frame, game_data, score_font,
                         flash_home=flash_home,
                         flash_away=flash_away,
-                        flash_color=flash_color
+                        flash_color=flash_color,
+                        show_sog=SCOREBOARD_SHOW_SOG
                     )
                 else:
                     # No live games
@@ -1617,61 +1799,33 @@ def run():
 
                     show_weather_now = weather_scroll_shown
 
-                    if show_weather_now and weather_sev in ["warning", "advisory", "watch"]:
-                        # Full screen weather alert - scrolls across full height
-                        weather_color = parse_color(WEATHER_WARNING_COLOR if weather_sev == "warning" else WEATHER_ADVISORY_COLOR)
+                    # Single row — inject weather alert into the line after time, then tickers
+                    parts=[time_srf]
+                    if show_weather_now and weather_msg:
+                        weather_color = parse_color(WEATHER_WARNING_COLOR if weather_sev == "warning" else WEATHER_STATEMENT_COLOR if weather_sev == "statement" else WEATHER_ADVISORY_COLOR)
                         formatted_msg = format_weather_alert_text(weather_msg, weather_sev)
-                        weather_srf = build_weather_alert_surface(formatted_msg, weather_color)
-
-                        # Center the weather message vertically
-                        weather_y = max(0, (H - weather_srf.get_height()) // 2)
-
-                        # Render scrolling weather alert
-                        parts_weather = [time_srf, weather_srf]
-                        curr_x = x_single
-                        total_w = 0
-
-                        for s in parts_weather:
-                            w = s.get_width()
-                            if -w < curr_x < W:
-                                if s == weather_srf:
-                                    frame.blit(s, (_sp(curr_x), weather_y))
-                                else:
-                                    frame.blit(s, (_sp(curr_x), 1))
-                            curr_x += w
-                            total_w += w
-
-                        total_w = max(1, total_w)
-                        x_single -= pps_single_current * dt
-
-                        if x_single < -total_w:
-                            completed_single += 1
-                            x_single = float(W)
-                            weather_scroll_shown = False  # Done scrolling, return to normal
-                            if not MESSAGE_TEST_FORCE:
-                                show_msg_single = injector_active and (MESSAGE_ROW in ("single","auto")) and (((completed_single+1)%max(1,MESSAGE_EVERY))==0)
-                    else:
-                        # Normal single row ticker
-                        parts=[time_srf]
-                        if market_open_srf:
-                            parts.append(market_open_srf)
-                        elif market_announcement_srf:
-                            parts.append(market_announcement_srf)
-                        if injector_active and (MESSAGE_TEST_FORCE or show_msg_single) and msg_surface and (MESSAGE_ROW in ("single","auto")):
-                            parts.append(msg_surface)
-                        parts += single_parts
-                        curr_x=x_single; total_w=0
-                        for s in parts:
-                            w=s.get_width()
-                            if -w<curr_x<W: frame.blit(s,(_sp(curr_x),1))
-                            curr_x+=w; total_w+=w
-                        total_w=max(1,total_w); x_single -= pps_single_current * dt
-                        if x_single < -total_w:
-                            completed_single+=1; x_single=float(W)
-                            if market_open_scrolls_left > 0:
-                                market_open_scrolls_left -= 1
-                            if not MESSAGE_TEST_FORCE:
-                                show_msg_single = injector_active and (MESSAGE_ROW in ("single","auto")) and (((completed_single+1)%max(1,MESSAGE_EVERY))==0)
+                        parts.append(row_render_text(f"*** {formatted_msg} ***  ", weather_color))
+                    elif market_open_srf:
+                        parts.append(market_open_srf)
+                    elif market_announcement_srf:
+                        parts.append(market_announcement_srf)
+                    if injector_active and (MESSAGE_TEST_FORCE or show_msg_single) and msg_surface and (MESSAGE_ROW in ("single","auto")):
+                        parts.append(msg_surface)
+                    parts += single_parts
+                    curr_x=x_single; total_w=0
+                    for s in parts:
+                        w=s.get_width()
+                        if -w<curr_x<W: frame.blit(s,(_sp(curr_x),1))
+                        curr_x+=w; total_w+=w
+                    total_w=max(1,total_w); x_single -= pps_single_current * dt
+                    if x_single < -total_w:
+                        completed_single+=1; x_single=float(W)
+                        if weather_scroll_shown:
+                            weather_scroll_shown = False  # one cycle done, re-evaluate next scroll
+                        if market_open_scrolls_left > 0:
+                            market_open_scrolls_left -= 1
+                        if not MESSAGE_TEST_FORCE:
+                            show_msg_single = injector_active and (MESSAGE_ROW in ("single","auto")) and (((completed_single+1)%max(1,MESSAGE_EVERY))==0)
                 else:
                     # dual layout
                     # Check if we should show weather alert on THIS scroll cycle
@@ -1691,86 +1845,68 @@ def run():
                         
                     show_weather_now = weather_scroll_shown
                         
-                    if show_weather_now and weather_sev in ["warning", "advisory", "watch"]:
-                        # Full screen weather alert - scrolls across full 16px height
-                        weather_color = parse_color(WEATHER_WARNING_COLOR if weather_sev == "warning" else WEATHER_ADVISORY_COLOR)
-                        # Format weather message with city and type
+                    # Top row — inject weather alert after time when active, then tickers
+                    # Priority: weather > market open > market announcement > pregame announce > tickers
+                    # Custom INJECT_MESSAGE is a separate 'if' (not elif) so it can still stack alongside any of the above
+                    parts_top=[time_srf]
+                    if show_weather_now and weather_msg:
+                        weather_color = parse_color(WEATHER_WARNING_COLOR if weather_sev == "warning" else WEATHER_STATEMENT_COLOR if weather_sev == "statement" else WEATHER_ADVISORY_COLOR)
                         formatted_msg = format_weather_alert_text(weather_msg, weather_sev)
-                        weather_srf = build_weather_alert_surface(formatted_msg, weather_color)
-                            
-                        # Center the weather message vertically in the full 16px
-                        weather_y = max(0, (H - weather_srf.get_height()) // 2)
-                            
-                        # Render scrolling weather alert
-                        parts_weather = [time_srf, weather_srf]
-                        curr_x = x_top
-                        total_w = 0
-                            
-                        for s in parts_weather:
-                            w = s.get_width()
-                            if -w < curr_x < W:
-                                # Draw weather message centered vertically
-                                if s == weather_srf:
-                                    frame.blit(s, (_sp(curr_x), weather_y))
-                                else:
-                                    # Draw time at normal top position
-                                    frame.blit(s, (_sp(curr_x), TOP_Y))
-                            curr_x += w
-                            total_w += w
-                            
-                        total_w = max(1, total_w)
-                        x_top -= pps_top_current * dt
-                            
-                        if x_top < -total_w:
-                            completed_top += 1
-                            x_top = float(W)
-                            weather_scroll_shown = False  # Done scrolling, return to normal
-                            if not MESSAGE_TEST_FORCE:
-                                show_msg_top = injector_active and (MESSAGE_ROW in ("top","both","auto")) and (((completed_top+1)%max(1,MESSAGE_EVERY))==0)
-                            
-                        # Don't render bottom row separately during weather alert
-                    else:
-                        # Normal top row ticker
-                        parts_top=[time_srf]
-                        # Property of solutions reseaux chromatel - inject market announcement
-                        if market_open_srf:
-                            parts_top.append(market_open_srf)
-                        elif market_announcement_srf:
-                            parts_top.append(market_announcement_srf)
-                        if injector_active and (MESSAGE_TEST_FORCE or show_msg_top) and msg_surface and (MESSAGE_ROW in ("top","both","auto")):
-                            parts_top.append(msg_surface)
+                        parts_top.append(row_render_text(f"*** {formatted_msg} ***  ", weather_color))
+                    elif market_open_srf:
+                        parts_top.append(market_open_srf)
+                    elif market_announcement_srf:
+                        parts_top.append(market_announcement_srf)
+                    elif SCOREBOARD_SHOW_COUNTDOWN and show_pregame_announce_top:
+                        _pg, _pg_league = _get_pregame_announce_game(scoreboard_latest, SCOREBOARD_PREGAME_WINDOW_MIN)
+                        if _pg:
+                            _mins = _pg.get("minutes_until_start", 0)
+                            _home = (_pg.get("home") or {}).get("code", "???")
+                            _away = (_pg.get("away") or {}).get("code", "???")
+                            _time_str = "SOON" if _mins <= 1 else f"{_mins}m"
+                            _ann_col = parse_color(SCOREBOARD_PREGAME_ANNOUNCE_COLOR)
+                            parts_top.append(row_render_text(f"*** {_away} vs {_home} starting in {_time_str} ***  ", _ann_col))
+                    if injector_active and (MESSAGE_TEST_FORCE or show_msg_top) and msg_surface and (MESSAGE_ROW in ("top","both","auto")):
+                        parts_top.append(msg_surface)
+                    parts_top += top_parts
 
-                        parts_top += top_parts
+                    curr_x=x_top; total_w_top=0
+                    for s in parts_top:
+                        w=s.get_width()
+                        if -w<curr_x<W: frame.blit(s,(_sp(curr_x),TOP_Y))
+                        curr_x+=w; total_w_top+=w
+                    total_w_top=max(1,total_w_top); x_top -= pps_top_current * dt
+                    if x_top < -total_w_top:
+                        completed_top+=1; x_top=float(W)
+                        if weather_scroll_shown:
+                            weather_scroll_shown = False  # one cycle done, re-evaluate next scroll
+                        if market_open_scrolls_left > 0:
+                            market_open_scrolls_left -= 1
+                        if not MESSAGE_TEST_FORCE:
+                            show_msg_top = injector_active and (MESSAGE_ROW in ("top","both","auto")) and (((completed_top+1)%max(1,MESSAGE_EVERY))==0)
+                        # Pregame announce flag — recalculate every scroll completion
+                        if SCOREBOARD_SHOW_COUNTDOWN and SCOREBOARD_ENABLED:
+                            _pg_chk, _ = _get_pregame_announce_game(scoreboard_latest, SCOREBOARD_PREGAME_WINDOW_MIN)
+                            show_pregame_announce_top = (_pg_chk is not None) and (((completed_top + 1) % max(1, SCOREBOARD_PREGAME_ANNOUNCE_EVERY)) == 0)
+                        else:
+                            show_pregame_announce_top = False
 
-                        curr_x=x_top; total_w_top=0
-                        for s in parts_top:
-                            w=s.get_width()
-                            if -w<curr_x<W: frame.blit(s,(_sp(curr_x),TOP_Y))
-                            curr_x+=w; total_w_top+=w
-                        total_w_top=max(1,total_w_top); x_top -= pps_top_current * dt
-                        if x_top < -total_w_top:
-                            completed_top+=1; x_top=float(W)
-                            if market_open_scrolls_left > 0:
-                                market_open_scrolls_left -= 1
-                            if not MESSAGE_TEST_FORCE:
-                                show_msg_top = injector_active and (MESSAGE_ROW in ("top","both","auto")) and (((completed_top+1)%max(1,MESSAGE_EVERY))==0)
-
-                        # bottom row - alternate between TICKERS_BOT and TICKERS_BOT2 every other roll
-                        _active_bot = bot_parts2 if (TICKERS_BOT2 and completed_bot % 2 == 1) else bot_parts
-                        parts_bot=[]
-                        if injector_active and (MESSAGE_TEST_FORCE or show_msg_bot) and msg_surface and (MESSAGE_ROW in ("bottom","both")):
-                            parts_bot.append(msg_surface)
-                        parts_bot += _active_bot
-                        curr_xb=x_bot; total_w_bot=0
-                        for s in parts_bot:
-                            w=s.get_width()
-                            if -w<curr_xb<W: frame.blit(s,(_sp(curr_xb),BOT_Y))
-                            curr_xb+=w; total_w_bot+=w
-                        total_w_bot=max(1,total_w_bot); x_bot -= pps_bot_current * dt
-                        if x_bot < -total_w_bot:
-                            completed_bot+=1; x_bot=float(W)
-                            if not MESSAGE_TEST_FORCE:
-                                show_msg_bot = injector_active and (MESSAGE_ROW in ("bottom","both")) and (((completed_bot+1)%max(1,MESSAGE_EVERY))==0)
+                    # Bottom row — always rendered (independent of weather on top row)
+                    _active_bot = bot_parts2 if (TICKERS_BOT2 and completed_bot % 2 == 1) else bot_parts
+                    parts_bot=[]
+                    if injector_active and (MESSAGE_TEST_FORCE or show_msg_bot) and msg_surface and (MESSAGE_ROW in ("bottom","both")):
+                        parts_bot.append(msg_surface)
+                    parts_bot += _active_bot
+                    curr_xb=x_bot; total_w_bot=0
+                    for s in parts_bot:
+                        w=s.get_width()
+                        if -w<curr_xb<W: frame.blit(s,(_sp(curr_xb),BOT_Y))
+                        curr_xb+=w; total_w_bot+=w
+                    total_w_bot=max(1,total_w_bot); x_bot -= pps_bot_current * dt
+                    if x_bot < -total_w_bot:
+                        completed_bot+=1; x_bot=float(W)
+                        if not MESSAGE_TEST_FORCE:
+                            show_msg_bot = injector_active and (MESSAGE_ROW in ("bottom","both")) and (((completed_bot+1)%max(1,MESSAGE_EVERY))==0)
 
             if override_mode != "BRIGHT":
                 apply_dimming_inplace(frame, current_dim_scale(now_dt))
@@ -1838,7 +1974,7 @@ def run():
         # Quit pygame
         try:
             pygame.quit()
-        except:
+        except Exception:
             pass
 
 if __name__ == "__main__":

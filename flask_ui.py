@@ -9,7 +9,7 @@ a Live Preview of the current display when the ticker is running.
 
 Notes
 -----
- - Preview works in both HDMI and RGBMATRIX modes by reading preview frames from /tmp/ticker_preview.png
+ - Preview works by reading preview frames from /tmp/ticker_preview.png
  - Ticker saves preview snapshots every 10th frame (~3 FPS at 30 FPS render rate)
  - If Pillow (PIL) is not installed, the preview endpoint will explain how to
    install it in your venv: `pip install pillow`.
@@ -309,6 +309,7 @@ HOME_HTML = """
  <span class="pill mono">hot-reload</span>
  <div class="toolbar">
    <a class="btn" href="{{ url_for('preview_page') }}">Live Preview</a>
+   <a class="btn secondary" href="{{ url_for('override_page') }}">Overrides</a>
    <a class="btn secondary" href="{{ url_for('documentation') }}">Documentation</a>
    <a class="btn secondary" href="{{ url_for('raw_editor') }}">Raw JSON Editor</a>
    <button class="secondary" type="button" onclick="fetch('/restart',{method:'POST'}).then(()=>location.reload())" title="Restart the ticker process/service">Restart Ticker</button>
@@ -444,7 +445,8 @@ function updateWorkers(){
         }).join(', ');
         leagueInfo = `<div>Today: <span style="color:#e5e7eb;">${leagues}</span></div>`;
       } else {
-        leagueInfo = `<div>Today: <span style=\"color:#e5e7eb;\">No games</span></div>`;
+        const gameTodayColor = s.game_today ? '#3b82f6' : '#9ca3af';
+        leagueInfo = `<div>Today: <span style="color:${gameTodayColor};">${s.game_today ? 'Game scheduled (outside window)' : 'No games'}</span></div>`;
       }
       let errorHtml = '';
       if (s.error_message) { errorHtml = `<div style="color:#dc2626;margin-top:4px;">WARN  ${s.error_message}</div>`; }
@@ -666,8 +668,24 @@ setInterval(updateWorkers,3000);
 <section>
  <h2>Holdings</h2>
  <p class="muted">Format: <span class="mono">SYMBOL=SHARES</span> one per line (fractions OK).</p>
- <label><input type="checkbox" name="HOLDINGS_ENABLED" value="1" {% if cfg.HOLDINGS_ENABLED %}checked{% endif %}> Enable holdings view</label>
+ <label><input type="checkbox" name="HOLDINGS_ENABLED" value="1" {% if cfg.HOLDINGS_ENABLED %}checked{% endif %}> Enable holdings view (show value per ticker)</label>
  <textarea name="HOLDINGS" rows="8">{{holdings_text}}</textarea>
+ <hr style="border:none;border-top:1px solid #1c2434;margin:12px 0">
+ <p class="muted">Row summaries — each prepends a labelled total to its scroll row. All totals use symbols from the row that have entries in Holdings above.</p>
+ <div class="grid3" style="margin-top:8px">
+  <div>
+   <label><input type="checkbox" name="PORTFOLIO_DISPLAY_ENABLED" value="1" {% if cfg.PORTFOLIO_DISPLAY_ENABLED %}checked{% endif %}> Show total on top row (TICKERS_TOP + all Holdings)</label>
+   <input name="PORTFOLIO_LABEL" maxlength="8" value="{{cfg.PORTFOLIO_LABEL or 'MY'}}" style="margin-top:4px;width:120px" placeholder="Label (max 8)">
+  </div>
+  <div>
+   <label><input type="checkbox" name="BOT_GROUP1_ENABLED" value="1" {% if cfg.BOT_GROUP1_ENABLED %}checked{% endif %}> Show group 1 total (bottom row 1 / TICKERS_BOT)</label>
+   <input name="BOT_GROUP1_LABEL" maxlength="8" value="{{cfg.BOT_GROUP1_LABEL or 'TFSA'}}" style="margin-top:4px;width:120px" placeholder="Label (max 8)">
+  </div>
+  <div>
+   <label><input type="checkbox" name="BOT_GROUP2_ENABLED" value="1" {% if cfg.BOT_GROUP2_ENABLED %}checked{% endif %}> Show group 2 total (bottom row 2 / TICKERS_BOT2)</label>
+   <input name="BOT_GROUP2_LABEL" maxlength="8" value="{{cfg.BOT_GROUP2_LABEL or 'RRSP'}}" style="margin-top:4px;width:120px" placeholder="Label (max 8)">
+  </div>
+ </div>
 </section>
 
 <section>
@@ -694,9 +712,8 @@ setInterval(updateWorkers,3000);
   <label><input type="checkbox" name="MESSAGE_TEST_FORCE" value="1" {% if cfg.MESSAGE_TEST_FORCE %}checked{% endif %}> Force message every scroll (test)</label>
  </div>
  <hr style="border:none;border-top:1px solid #1c2434;margin:14px 0">
- <div class="grid3" style="margin-top:8px">
+ <div class="grid2" style="margin-top:8px">
   <div><label>Weather RSS URL</label><input name="WEATHER_RSS_URL" value="{{cfg.WEATHER_RSS_URL or ''}}"></div>
-  <div><label>Weather Announce Every (sec)</label><input name="WEATHER_ANNOUNCE_SEC" type="number" value="{{cfg.WEATHER_ANNOUNCE_SEC or 600}}"></div>
   <div><label>Weather Refresh (sec)</label><input name="WEATHER_REFRESH_SEC" type="number" value="{{cfg.WEATHER_REFRESH_SEC or 300}}"></div>
  </div>
  <div class="grid3" style="margin-top:8px">
@@ -709,20 +726,16 @@ setInterval(updateWorkers,3000);
   <div><label>Weather Test Delay (s) (0=off)</label><input name="WEATHER_TEST_DELAY" type="number" value="{{cfg.WEATHER_TEST_DELAY or 0}}"></div>
   <div><label>Weather Sticky Duration (s)</label><input name="WEATHER_STICKY_SEC" type="number" value="{{cfg.WEATHER_STICKY_SEC or 20}}" title="How long banner stays visible"></div>
  </div>
- <div class="grid3" style="margin-top:8px">
-  <div><label>Weather Test Sticky Total (s)</label><input name="WEATHER_TEST_STICKY_TOTAL" type="number" value="{{cfg.WEATHER_TEST_STICKY_TOTAL or 60}}" title="Test mode banner duration"></div>
-  <div><label>Weather Repeat Every (s)</label><input name="WEATHER_REPEAT_SEC" type="number" value="{{cfg.WEATHER_REPEAT_SEC or 600}}" title="Re-announce interval for active alerts"></div>
- </div>
  <hr style="border:none;border-top:1px solid #1c2434;margin:14px 0">
  <h3 style="margin-top:16px;font-size:15px;color:#94a3b8;"> Weather Alert Display by Severity</h3>
  <p class="muted">Control how weather alerts appear based on severity level.</p>
  <div class="grid4" style="margin-top:8px">
   <div>
-   <label> Warnings - Every N Scrolls</label>
-   <input name="WEATHER_WARNING_EVERY_N_SCROLLS" type="number" min="1" value="{{cfg.WEATHER_WARNING_EVERY_N_SCROLLS or 5}}" title="Show red warnings every N scrolls">
+   <label>Warnings — Every N Scrolls</label>
+   <input name="WEATHER_WARNING_EVERY_N_SCROLLS" type="number" min="1" value="{{cfg.WEATHER_WARNING_EVERY_N_SCROLLS or 5}}">
   </div>
   <div>
-   <label> Warning Color</label>
+   <label>Warning Color</label>
    <select name="WEATHER_WARNING_COLOR">
     {% for color in ["red","white","yellow","cyan","magenta","orange"] %}
     <option value="{{color}}" {% if cfg.WEATHER_WARNING_COLOR==color %}selected{% endif %}>{{color}}</option>
@@ -730,21 +743,42 @@ setInterval(updateWorkers,3000);
    </select>
   </div>
   <div>
-   <label> Advisories - Every N Scrolls</label>
-   <input name="WEATHER_ADVISORY_EVERY_N_SCROLLS" type="number" min="1" value="{{cfg.WEATHER_ADVISORY_EVERY_N_SCROLLS or 10}}" title="Show yellow advisories every N scrolls">
+   <label>Advisories/Watches — Every N Scrolls</label>
+   <input name="WEATHER_ADVISORY_EVERY_N_SCROLLS" type="number" min="1" value="{{cfg.WEATHER_ADVISORY_EVERY_N_SCROLLS or 10}}">
   </div>
   <div>
-   <label> Advisory Color</label>
+   <label>Advisory Color</label>
    <select name="WEATHER_ADVISORY_COLOR">
     {% for color in ["yellow","cyan","white","magenta","orange"] %}
     <option value="{{color}}" {% if cfg.WEATHER_ADVISORY_COLOR==color %}selected{% endif %}>{{color}}</option>
     {% endfor %}
    </select>
   </div>
+  <div>
+   <label>Statements — Every N Scrolls</label>
+   <input name="WEATHER_STATEMENT_EVERY_N_SCROLLS" type="number" min="1" value="{{cfg.WEATHER_STATEMENT_EVERY_N_SCROLLS or 15}}">
+  </div>
+  <div>
+   <label>Statement Color</label>
+   <select name="WEATHER_STATEMENT_COLOR">
+    {% for color in ["cyan","yellow","white","magenta","orange"] %}
+    <option value="{{color}}" {% if cfg.WEATHER_STATEMENT_COLOR==color %}selected{% endif %}>{{color}}</option>
+    {% endfor %}
+   </select>
+  </div>
+  <div>
+   <label>Weather Preroll After Clock</label>
+   <label><input type="checkbox" name="WEATHER_PREROLL_ENABLED" value="1" {% if cfg.WEATHER_PREROLL_ENABLED != false %}checked{% endif %}> Show alert full-screen after top-of-hour</label>
+  </div>
+  <div>
+   <label>Weather Preroll Duration (s)</label>
+   <input name="WEATHER_PREROLL_SEC" type="number" min="1" value="{{cfg.WEATHER_PREROLL_SEC or 8}}">
+  </div>
  </div>
  <p class="muted" style="margin-top:8px;">
-  <strong>Warnings</strong> (red): Full 16px display, more frequent<br>
-  <strong>Advisories/Watches</strong> (yellow): Top line only, less frequent
+  <strong>Warnings</strong>: highest severity, most frequent<br>
+  <strong>Advisories/Watches</strong>: moderate severity<br>
+  <strong>Statements</strong> (Special Weather Statement): informational, least frequent
  </p>
 </section>
 
@@ -780,9 +814,14 @@ setInterval(updateWorkers,3000);
   <div><label>Max games</label><input name="SCOREBOARD_MAX_GAMES" type="number" min="1" value="{{cfg.SCOREBOARD_MAX_GAMES or 2}}"></div>
  </div>
  <div class="grid3" style="margin-top:8px">
-  <div><label>Pregame Window (min)</label><input name="SCOREBOARD_PREGAME_WINDOW_MIN" type="number" value="{{cfg.SCOREBOARD_PREGAME_WINDOW_MIN or 30}}" title="Show scoreboard N minutes before game starts"></div>
+  <div><label>Pregame Window (min)</label><input name="SCOREBOARD_PREGAME_WINDOW_MIN" type="number" value="{{cfg.SCOREBOARD_PREGAME_WINDOW_MIN or 30}}" title="Start announcing and tracking pregame data this many minutes before game start"></div>
   <div><label>Postgame Delay (min)</label><input name="SCOREBOARD_POSTGAME_DELAY_MIN" type="number" value="{{cfg.SCOREBOARD_POSTGAME_DELAY_MIN or 5}}" title="Keep showing scoreboard N minutes after FINAL"></div>
-  <label><input type="checkbox" name="SCOREBOARD_SHOW_COUNTDOWN" value="1" {% if cfg.SCOREBOARD_SHOW_COUNTDOWN %}checked{% endif %} title="Show 'GAME STARTS IN Xm' for pregame"> Show Countdown</label>
+  <label><input type="checkbox" name="SCOREBOARD_SHOW_COUNTDOWN" value="1" {% if cfg.SCOREBOARD_SHOW_COUNTDOWN %}checked{% endif %} title="Inject pregame announcement on top row and flip to scoreboard at T-minus trigger"> Pregame Announce</label>
+ </div>
+ <div class="grid3" style="margin-top:8px">
+  <div><label>Announce every N scrolls</label><input name="SCOREBOARD_PREGAME_ANNOUNCE_EVERY" type="number" min="1" value="{{cfg.SCOREBOARD_PREGAME_ANNOUNCE_EVERY or 5}}" title="When Pregame Announce is on, inject every N top-row scroll completions"></div>
+  <div><label>Announce color</label><input name="SCOREBOARD_PREGAME_ANNOUNCE_COLOR" value="{{cfg.SCOREBOARD_PREGAME_ANNOUNCE_COLOR or 'cyan'}}" title="Color of the pregame announcement text (e.g. cyan, yellow, white)"></div>
+  <div><label>Scoreboard trigger (min before)</label><input name="SCOREBOARD_LIVE_TRIGGER_MIN" type="number" min="1" value="{{cfg.SCOREBOARD_LIVE_TRIGGER_MIN or 5}}" title="Flip into full scoreboard mode this many minutes before game start (shows 0-0 PRE until live)"></div>
  </div>
  <div class="grid4" style="margin-top:8px">
   <div><label>Precedence</label>
@@ -792,14 +831,6 @@ setInterval(updateWorkers,3000);
     {% endfor %}
    </select>
   </div>
-  <div><label>Layout</label>
-   <select name="SCOREBOARD_LAYOUT">
-    {% for opt in ["auto","left","center"] %}
-    <option value="{{opt}}" {% if cfg.SCOREBOARD_LAYOUT==opt %}selected{% endif %}>{{opt}}</option>
-    {% endfor %}
-   </select>
-  </div>
-  <label><input type="checkbox" name="SCOREBOARD_UPPERCASE" value="1" {% if cfg.SCOREBOARD_UPPERCASE %}checked{% endif %}> Uppercase</label>
   <label><input type="checkbox" name="SCOREBOARD_HOME_FIRST" value="1" {% if cfg.SCOREBOARD_HOME_FIRST %}checked{% endif %}> Home first</label>
  </div>
  <div class="grid4" style="margin-top:8px">
@@ -808,24 +839,8 @@ setInterval(updateWorkers,3000);
   <label><input type="checkbox" name="SCOREBOARD_SHOW_POSSESSION" value="1" {% if cfg.SCOREBOARD_SHOW_POSSESSION %}checked{% endif %}> Show possession (NFL)</label>
   <label><input type="checkbox" name="SCOREBOARD_INCLUDE_OTHERS" value="1" {% if cfg.SCOREBOARD_INCLUDE_OTHERS %}checked{% endif %}> Include others</label>
  </div>
- <div class="grid3" style="margin-top:8px">
+ <div class="grid2" style="margin-top:8px">
   <label><input type="checkbox" name="SCOREBOARD_ONLY_MY_TEAMS" value="1" {% if cfg.SCOREBOARD_ONLY_MY_TEAMS %}checked{% endif %}> Only my teams</label>
-  <div>
-   <label>Scroll vs Static</label>
-   <select name="SCOREBOARD_SCROLL_ENABLED">
-    <option value="1" {% if cfg.SCOREBOARD_SCROLL_ENABLED %}selected{% endif %}>scroll</option>
-    <option value="0" {% if not cfg.SCOREBOARD_SCROLL_ENABLED %}selected{% endif %}>static</option>
-   </select>
-  </div>
-  <div><label>Static dwell (sec)</label><input name="SCOREBOARD_STATIC_DWELL_SEC" type="number" min="2" value="{{cfg.SCOREBOARD_STATIC_DWELL_SEC or 4}}"></div>
- </div>
- <div style="margin-top:8px">
-  <label>Static align</label>
-  <select name="SCOREBOARD_STATIC_ALIGN">
-   {% for opt in ["left","center"] %}
-   <option value="{{opt}}" {% if cfg.SCOREBOARD_STATIC_ALIGN==opt %}selected{% endif %}>{{opt}}</option>
-   {% endfor %}
-  </select>
  </div>
  <details style="margin-top:12px">
   <summary>Scoreboard Test Harness</summary>
@@ -976,7 +991,7 @@ OVERRIDE_HTML = """
   <div class="grid3">
    <div><label>Mode</label>
     <select name="OVERRIDE_MODE">
-     {% for m in ["OFF","BRIGHT","SCOREBOARD","MESSAGE","MAINT","CLOCK"] %}
+     {% for m in ["OFF","BRIGHT","SCOREBOARD","MESSAGE","MAINT","CLOCK","LOGO"] %}
      <option value="{{m}}" {% if cfg.OVERRIDE_MODE==m %}selected{% endif %}>{{m}}</option>
      {% endfor %}
     </select>
@@ -987,8 +1002,29 @@ OVERRIDE_HTML = """
    <div><label>Message text (for MESSAGE override)</label>
     <input name="OVERRIDE_MESSAGE_TEXT" value="{{cfg.OVERRIDE_MESSAGE_TEXT or ''}}">
    </div>
+   <div><label>Message color</label>
+    <select name="OVERRIDE_MESSAGE_COLOR">
+     {% for c in ["yellow","white","green","red","cyan","blue","magenta","orange"] %}
+     <option value="{{c}}" {% if (cfg.OVERRIDE_MESSAGE_COLOR or 'yellow')==c %}selected{% endif %}>{{c}}</option>
+     {% endfor %}
+    </select>
+   </div>
+   <div><label>Message display mode</label>
+    <label style="margin-right:12px"><input type="radio" name="OVERRIDE_MESSAGE_SCROLL" value="1" {% if cfg.OVERRIDE_MESSAGE_SCROLL != false %}checked{% endif %}> Scroll</label>
+    <label><input type="radio" name="OVERRIDE_MESSAGE_SCROLL" value="0" {% if cfg.OVERRIDE_MESSAGE_SCROLL == false %}checked{% endif %}> Static (centered)</label>
+   </div>
+   <div><label>Logo file path (for LOGO override)</label>
+    <input name="LOGO_PATH" value="{{cfg.LOGO_PATH or 'logo.png'}}">
+   </div>
+   <div><label>Logo scroll speed px/s (for LOGO override)</label>
+    <input type="number" name="LOGO_PPS" step="0.5" min="1" value="{{cfg.LOGO_PPS or 30.0}}">
+   </div>
+   <div><label>Logo display mode</label>
+    <label style="margin-right:12px"><input type="radio" name="LOGO_SCROLL" value="1" {% if cfg.LOGO_SCROLL != false %}checked{% endif %}> Scroll</label>
+    <label><input type="radio" name="LOGO_SCROLL" value="0" {% if cfg.LOGO_SCROLL == false %}checked{% endif %}> Static (centered)</label>
+   </div>
   </div>
-  <p class="muted">For <span class="mono">CLOCK</span>, adjust settings in the "Clock (Standalone Override)" section on the main page.</p>
+  <p class="muted">For <span class="mono">CLOCK</span>, adjust settings in the "Clock (Standalone Override)" section on the main page.<br>For <span class="mono">LOGO</span>, place <span class="mono">logo.png</span> in the ticker directory (or set an absolute path). The image is scaled to the full display height.</p>
   <div style="margin-top:12px"><button type="submit">Apply</button></div>
  </form>
 </section>
@@ -1137,7 +1173,15 @@ def save():
     cfg["HOLDINGS_ENABLED"] = _get_bool(
         request.form, "HOLDINGS_ENABLED", cfg.get("HOLDINGS_ENABLED", True)
     )
+    cfg["PORTFOLIO_DISPLAY_ENABLED"] = _get_bool(
+        request.form, "PORTFOLIO_DISPLAY_ENABLED", cfg.get("PORTFOLIO_DISPLAY_ENABLED", False)
+    )
+    cfg["PORTFOLIO_LABEL"] = (request.form.get("PORTFOLIO_LABEL") or "MY").strip().upper()[:8]
     cfg["HOLDINGS"] = _parse_holdings(request.form.get("HOLDINGS", ""))
+    cfg["BOT_GROUP1_ENABLED"] = _get_bool(request.form, "BOT_GROUP1_ENABLED", cfg.get("BOT_GROUP1_ENABLED", False))
+    cfg["BOT_GROUP1_LABEL"]   = (request.form.get("BOT_GROUP1_LABEL") or "TFSA").strip().upper()[:8]
+    cfg["BOT_GROUP2_ENABLED"] = _get_bool(request.form, "BOT_GROUP2_ENABLED", cfg.get("BOT_GROUP2_ENABLED", False))
+    cfg["BOT_GROUP2_LABEL"]   = (request.form.get("BOT_GROUP2_LABEL") or "RRSP").strip().upper()[:8]
 
     # --- Preroll ---
     cfg["TIME_PREROLL_ENABLED"] = _get_bool(request.form, "TIME_PREROLL_ENABLED", cfg.get("TIME_PREROLL_ENABLED", True))
@@ -1153,23 +1197,24 @@ def save():
     cfg["MESSAGE_COLOR"] = request.form.get("MESSAGE_COLOR", cfg.get("MESSAGE_COLOR", "yellow"))
     cfg["MESSAGE_TEST_FORCE"] = _get_bool(request.form, "MESSAGE_TEST_FORCE", cfg.get("MESSAGE_TEST_FORCE", False))
     cfg["WEATHER_RSS_URL"] = request.form.get("WEATHER_RSS_URL", cfg.get("WEATHER_RSS_URL", ""))
-    cfg["WEATHER_ANNOUNCE_SEC"] = _get_num(request.form, "WEATHER_ANNOUNCE_SEC", cfg.get("WEATHER_ANNOUNCE_SEC", 600), int)
     cfg["WEATHER_REFRESH_SEC"] = _get_num(request.form, "WEATHER_REFRESH_SEC", cfg.get("WEATHER_REFRESH_SEC", 300), int)
     cfg["WEATHER_INCLUDE_WATCH"] = _get_bool(request.form, "WEATHER_INCLUDE_WATCH", cfg.get("WEATHER_INCLUDE_WATCH", True))
     cfg["WEATHER_FORCE_ACTIVE"] = _get_bool(request.form, "WEATHER_FORCE_ACTIVE", cfg.get("WEATHER_FORCE_ACTIVE", False))
     cfg["WEATHER_FORCE_TEXT"] = request.form.get("WEATHER_FORCE_TEXT", cfg.get("WEATHER_FORCE_TEXT", ""))
     # Extended Weather
-    cfg["WEATHER_REPEAT_SEC"] = _get_num(request.form, "WEATHER_REPEAT_SEC", cfg.get("WEATHER_REPEAT_SEC", 600), int)
     cfg["WEATHER_STICKY_SEC"] = _get_num(request.form, "WEATHER_STICKY_SEC", cfg.get("WEATHER_STICKY_SEC", 20), int)
-    cfg["WEATHER_TEST_STICKY_TOTAL"] = _get_num(request.form, "WEATHER_TEST_STICKY_TOTAL", cfg.get("WEATHER_TEST_STICKY_TOTAL", 60), int)
     cfg["WEATHER_TIMEOUT"] = _get_num(request.form, "WEATHER_TIMEOUT", cfg.get("WEATHER_TIMEOUT", 5.0), float)
     cfg["WEATHER_TEST_DELAY"] = _get_num(request.form, "WEATHER_TEST_DELAY", cfg.get("WEATHER_TEST_DELAY", 0), int)
 
     # --- Weather Severity Display ---
-    cfg["WEATHER_WARNING_EVERY_N_SCROLLS"] = _get_num(request.form, "WEATHER_WARNING_EVERY_N_SCROLLS", cfg.get("WEATHER_WARNING_EVERY_N_SCROLLS", 5), int)
-    cfg["WEATHER_WARNING_COLOR"] = request.form.get("WEATHER_WARNING_COLOR", cfg.get("WEATHER_WARNING_COLOR", "red"))
-    cfg["WEATHER_ADVISORY_EVERY_N_SCROLLS"] = _get_num(request.form, "WEATHER_ADVISORY_EVERY_N_SCROLLS", cfg.get("WEATHER_ADVISORY_EVERY_N_SCROLLS", 10), int)
-    cfg["WEATHER_ADVISORY_COLOR"] = request.form.get("WEATHER_ADVISORY_COLOR", cfg.get("WEATHER_ADVISORY_COLOR", "yellow"))
+    cfg["WEATHER_WARNING_EVERY_N_SCROLLS"]   = _get_num(request.form, "WEATHER_WARNING_EVERY_N_SCROLLS", cfg.get("WEATHER_WARNING_EVERY_N_SCROLLS", 5), int)
+    cfg["WEATHER_WARNING_COLOR"]             = request.form.get("WEATHER_WARNING_COLOR", cfg.get("WEATHER_WARNING_COLOR", "red"))
+    cfg["WEATHER_ADVISORY_EVERY_N_SCROLLS"]  = _get_num(request.form, "WEATHER_ADVISORY_EVERY_N_SCROLLS", cfg.get("WEATHER_ADVISORY_EVERY_N_SCROLLS", 10), int)
+    cfg["WEATHER_ADVISORY_COLOR"]            = request.form.get("WEATHER_ADVISORY_COLOR", cfg.get("WEATHER_ADVISORY_COLOR", "yellow"))
+    cfg["WEATHER_STATEMENT_EVERY_N_SCROLLS"] = _get_num(request.form, "WEATHER_STATEMENT_EVERY_N_SCROLLS", cfg.get("WEATHER_STATEMENT_EVERY_N_SCROLLS", 15), int)
+    cfg["WEATHER_STATEMENT_COLOR"]           = request.form.get("WEATHER_STATEMENT_COLOR", cfg.get("WEATHER_STATEMENT_COLOR", "cyan"))
+    cfg["WEATHER_PREROLL_ENABLED"]           = _get_bool(request.form, "WEATHER_PREROLL_ENABLED", cfg.get("WEATHER_PREROLL_ENABLED", True))
+    cfg["WEATHER_PREROLL_SEC"]               = _get_num(request.form, "WEATHER_PREROLL_SEC", cfg.get("WEATHER_PREROLL_SEC", 8), int)
 
     # Remove legacy keys if still present in old configs
     for old_key in ("SCHEDULE_ENABLED", "SCHEDULE_OFF_START", "SCHEDULE_OFF_END", "SCHEDULE_BLANK_FPS",
@@ -1177,7 +1222,10 @@ def save():
                      "DIM_ENABLED", "DIM_LEVEL", "DIM_CUSTOM_PCT", "DIM_SCHEDULE_ENABLED",
                      "DIM1_START", "DIM1_END", "DIM1_PCT", "DIM2_START", "DIM2_END", "DIM2_PCT",
                      "DIM3_START", "DIM3_END", "DIM3_PCT",
-                     "OUTPUT_MODE", "TICKER_SCALE", "FORCE_KMS", "USE_SDL_SCALED", "USE_BUSY_LOOP"):
+                     "OUTPUT_MODE", "TICKER_SCALE", "FORCE_KMS", "USE_SDL_SCALED", "USE_BUSY_LOOP",
+                     "SCOREBOARD_SCROLL_ENABLED", "SCOREBOARD_STATIC_DWELL_SEC", "SCOREBOARD_STATIC_ALIGN",
+                     "SCOREBOARD_LAYOUT", "SCOREBOARD_UPPERCASE",
+                     "BOT_GROUP1_SYMBOLS", "BOT_GROUP2_SYMBOLS"):
         cfg.pop(old_key, None)
 
     # --- Night Mode ---
@@ -1197,10 +1245,11 @@ def save():
     cfg["SCOREBOARD_LIVE_REFRESH"] = _get_num(request.form, "SCOREBOARD_LIVE_REFRESH", cfg.get("SCOREBOARD_LIVE_REFRESH", 45), int)
     cfg["SCOREBOARD_PREGAME_WINDOW_MIN"] = _get_num(request.form, "SCOREBOARD_PREGAME_WINDOW_MIN", cfg.get("SCOREBOARD_PREGAME_WINDOW_MIN", 30), int)
     cfg["SCOREBOARD_POSTGAME_DELAY_MIN"] = _get_num(request.form, "SCOREBOARD_POSTGAME_DELAY_MIN", cfg.get("SCOREBOARD_POSTGAME_DELAY_MIN", 5), int)
-    cfg["SCOREBOARD_SHOW_COUNTDOWN"] = _get_bool(request.form, "SCOREBOARD_SHOW_COUNTDOWN", cfg.get("SCOREBOARD_SHOW_COUNTDOWN", True))
+    cfg["SCOREBOARD_SHOW_COUNTDOWN"]        = _get_bool(request.form, "SCOREBOARD_SHOW_COUNTDOWN", cfg.get("SCOREBOARD_SHOW_COUNTDOWN", False))
+    cfg["SCOREBOARD_PREGAME_ANNOUNCE_EVERY"] = _get_num(request.form, "SCOREBOARD_PREGAME_ANNOUNCE_EVERY", cfg.get("SCOREBOARD_PREGAME_ANNOUNCE_EVERY", 5), int)
+    cfg["SCOREBOARD_PREGAME_ANNOUNCE_COLOR"]  = (request.form.get("SCOREBOARD_PREGAME_ANNOUNCE_COLOR") or cfg.get("SCOREBOARD_PREGAME_ANNOUNCE_COLOR") or "cyan").strip().lower()
+    cfg["SCOREBOARD_LIVE_TRIGGER_MIN"]        = _get_num(request.form, "SCOREBOARD_LIVE_TRIGGER_MIN", cfg.get("SCOREBOARD_LIVE_TRIGGER_MIN", 5), int)
     cfg["SCOREBOARD_PRECEDENCE"] = request.form.get("SCOREBOARD_PRECEDENCE", cfg.get("SCOREBOARD_PRECEDENCE", "normal"))
-    cfg["SCOREBOARD_LAYOUT"] = request.form.get("SCOREBOARD_LAYOUT", cfg.get("SCOREBOARD_LAYOUT", "auto"))
-    cfg["SCOREBOARD_UPPERCASE"] = _get_bool(request.form, "SCOREBOARD_UPPERCASE", cfg.get("SCOREBOARD_UPPERCASE", True))
     cfg["SCOREBOARD_HOME_FIRST"] = _get_bool(request.form, "SCOREBOARD_HOME_FIRST", cfg.get("SCOREBOARD_HOME_FIRST", True))
     cfg["SCOREBOARD_SHOW_CLOCK"] = _get_bool(request.form, "SCOREBOARD_SHOW_CLOCK", cfg.get("SCOREBOARD_SHOW_CLOCK", True))
     cfg["SCOREBOARD_SHOW_SOG"] = _get_bool(request.form, "SCOREBOARD_SHOW_SOG", cfg.get("SCOREBOARD_SHOW_SOG", True))
@@ -1208,9 +1257,6 @@ def save():
     cfg["SCOREBOARD_INCLUDE_OTHERS"] = _get_bool(request.form, "SCOREBOARD_INCLUDE_OTHERS", cfg.get("SCOREBOARD_INCLUDE_OTHERS", False))
     cfg["SCOREBOARD_ONLY_MY_TEAMS"] = _get_bool(request.form, "SCOREBOARD_ONLY_MY_TEAMS", cfg.get("SCOREBOARD_ONLY_MY_TEAMS", True))
     cfg["SCOREBOARD_MAX_GAMES"] = _get_num(request.form, "SCOREBOARD_MAX_GAMES", cfg.get("SCOREBOARD_MAX_GAMES", 2), int)
-    cfg["SCOREBOARD_SCROLL_ENABLED"] = request.form.get("SCOREBOARD_SCROLL_ENABLED", "1") == "1"
-    cfg["SCOREBOARD_STATIC_DWELL_SEC"] = _get_num(request.form, "SCOREBOARD_STATIC_DWELL_SEC", cfg.get("SCOREBOARD_STATIC_DWELL_SEC", 4), int)
-    cfg["SCOREBOARD_STATIC_ALIGN"] = request.form.get("SCOREBOARD_STATIC_ALIGN", cfg.get("SCOREBOARD_STATIC_ALIGN", "left"))
     # Test harness
     cfg["SCOREBOARD_TEST"] = _get_bool(request.form, "SCOREBOARD_TEST", cfg.get("SCOREBOARD_TEST", False))
     cfg["SCOREBOARD_TEST_LEAGUE"] = request.form.get("SCOREBOARD_TEST_LEAGUE", cfg.get("SCOREBOARD_TEST_LEAGUE", "NHL"))
@@ -1291,7 +1337,12 @@ def apply_override():
         cfg["OVERRIDE_DURATION_MIN"] = int(request.form.get("OVERRIDE_DURATION_MIN", "0") or 0)
     except Exception:
         cfg["OVERRIDE_DURATION_MIN"] = 0
-    cfg["OVERRIDE_MESSAGE_TEXT"] = request.form.get("OVERRIDE_MESSAGE_TEXT", "")
+    cfg["OVERRIDE_MESSAGE_TEXT"]   = request.form.get("OVERRIDE_MESSAGE_TEXT", "")
+    cfg["OVERRIDE_MESSAGE_COLOR"]  = (request.form.get("OVERRIDE_MESSAGE_COLOR", "yellow") or "yellow").strip()
+    cfg["OVERRIDE_MESSAGE_SCROLL"] = request.form.get("OVERRIDE_MESSAGE_SCROLL", "1") == "1"
+    cfg["LOGO_PATH"]   = (request.form.get("LOGO_PATH", cfg.get("LOGO_PATH", "logo.png")) or "logo.png").strip()
+    cfg["LOGO_PPS"]    = _get_num(request.form, "LOGO_PPS", cfg.get("LOGO_PPS", 30.0), float)
+    cfg["LOGO_SCROLL"] = request.form.get("LOGO_SCROLL", "1") == "1"
     atomic_save_cfg(cfg)
     flash(f"Override applied: {cfg['OVERRIDE_MODE']}")
     return redirect(url_for("override_page"))

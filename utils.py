@@ -11,6 +11,7 @@ Includes: market hours detection, data fetching, config helpers, etc.
 import os
 import time
 import json
+import unicodedata
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, time as dtime
@@ -186,6 +187,10 @@ def normalize_ws(s: str) -> str:
     """Normalize whitespace in string."""
     return " ".join((s or "").split())
 
+def ascii_fold(s: str) -> str:
+    """Strip diacritics so accented chars render cleanly on LED (e.g. é→e, È→E, ñ→n)."""
+    return "".join(c for c in unicodedata.normalize("NFD", s or "") if unicodedata.category(c) != "Mn")
+
 def fetch_weather_warning(rss_url: str, timeout: float = 5.0, include_watch: bool = True):
     """Parse Environment Canada RSS/Atom for Watch/Warning. Returns (active, message, severity)."""
     try:
@@ -205,17 +210,17 @@ def fetch_weather_warning(rss_url: str, timeout: float = 5.0, include_watch: boo
     if entries:
         for entry in entries:
             title_elem = entry.find('atom:title', ns)
-            title = (title_elem.text or "").strip() if title_elem is not None else ""
+            title = ascii_fold((title_elem.text or "").strip() if title_elem is not None else "")
             t = title.lower()
             
             # Skip "no watches or warnings" messages
-            if "no watch" in t or "no warning" in t or "no advisory" in t:
+            if "no watch" in t or "no warning" in t or "no advisory" in t or "no statement" in t:
                 continue
-            
+
             # Skip ENDED alerts
             if "ended" in t:
                 continue
-            
+
             # Determine severity based on color prefix
             severity = ""
             if "red warning" in t or "red advisory" in t:
@@ -232,30 +237,33 @@ def fetch_weather_warning(rss_url: str, timeout: float = 5.0, include_watch: boo
                 severity = "advisory"
             elif "watch" in t:
                 severity = "watch"
-            
+            elif "statement" in t:
+                # Special Weather Statement — own severity level, controlled by include_watch
+                severity = "statement"
+
             # Only return if we have a valid severity
             if severity == "warning":
                 msg = title if len(title) <= 80 else title[:80].rstrip() + "..."
                 return True, msg, "warning"
-            elif severity in ["advisory", "watch"] and include_watch:
+            elif severity in ["advisory", "watch", "statement"] and include_watch:
                 msg = title if len(title) <= 80 else title[:80].rstrip() + "..."
                 return True, msg, severity
-    
+
     # Fallback: RSS format
     channel = root.find("./channel")
     if channel is not None:
         for item in channel.findall("item"):
-            title = normalize_ws(item.findtext("title") or "")
+            title = ascii_fold(normalize_ws(item.findtext("title") or ""))
             t = title.lower()
-            
+
             # Skip "no watches or warnings" messages
-            if "no watch" in t or "no warning" in t or "no advisory" in t:
+            if "no watch" in t or "no warning" in t or "no advisory" in t or "no statement" in t:
                 continue
-            
+
             # Skip ENDED alerts
             if "ended" in t:
                 continue
-            
+
             # Determine severity based on color prefix
             severity = ""
             if "red warning" in t or "red advisory" in t:
@@ -272,12 +280,15 @@ def fetch_weather_warning(rss_url: str, timeout: float = 5.0, include_watch: boo
                 severity = "advisory"
             elif "watch" in t:
                 severity = "watch"
-            
+            elif "statement" in t:
+                # Special Weather Statement — own severity level, controlled by include_watch
+                severity = "statement"
+
             # Only return if we have a valid severity
             if severity == "warning":
                 msg = title if len(title) <= 80 else title[:80].rstrip() + "..."
                 return True, msg, "warning"
-            elif severity in ["advisory", "watch"] and include_watch:
+            elif severity in ["advisory", "watch", "statement"] and include_watch:
                 msg = title if len(title) <= 80 else title[:80].rstrip() + "..."
                 return True, msg, severity
     

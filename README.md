@@ -54,13 +54,14 @@ A built‑in Web UI handles all configuration and updates instantly with **hot�
   - Market open/closed
   - Pre‑market status
   - Data freshness
-  - Whether your tracked team plays today
+  - **Blue all day** when your tracked team has a game scheduled that day
 
 ### 🏒 Live Sports Scoreboards
 - Automatically activates full-height scoreboard when your team is playing
 - Supports NHL + NFL
 - Goal/touchdown flash animations + scrolling alerts
 - Compact scoreboard mode that fits inside ticker rows
+- NHL data via `api-web.nhle.com`, with automatic fallback to ESPN API if unreachable
 
 ### 🌩 Weather Alerts (Environment Canada)
 - Reads regional RSS alert feeds
@@ -91,7 +92,7 @@ Overrides are the highest‑priority state.
 ticker.py             Main loop + state machine
 ├── market_worker     Fetches financial data via yfinance
 ├── weather_worker    Fetches Environment Canada RSS alerts
-└── scoreboard_worker Fetches NHL/NFL game data
+└── scoreboard_worker Fetches NHL/NFL game data (NHL: nhle.com API, ESPN fallback)
 
 rendering.py          Drawing, fonts, dimming, RGB matrix output
 flask_ui.py           Web UI + REST API (port 5080)
